@@ -37,9 +37,25 @@ def liberar_inventario(pedido):
     pedido.save(update_fields=["inventario_liberado"])
 
 
+def expirar_pedidos_pendientes(usuario=None):
+    pendientes = Pedido.objects.select_for_update().filter(
+        estado=Pedido.Estado.PENDIENTE_PAGO,
+        expira_en__lte=timezone.now(),
+        inventario_liberado=False,
+    )
+    if usuario is not None:
+        pendientes = pendientes.filter(usuario=usuario)
+    for pedido in pendientes:
+        liberar_inventario(pedido)
+        pedido.estado = Pedido.Estado.CANCELADO
+        pedido.save(update_fields=["estado"])
+
+
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def listar_pedidos(request):
+    with transaction.atomic():
+        expirar_pedidos_pendientes(request.user)
     pedidos = Pedido.objects.filter(
         usuario=request.user
     ).prefetch_related("detalles").select_related("pago", "direccion")
@@ -50,6 +66,7 @@ def listar_pedidos(request):
 @permission_classes([IsAuthenticated])
 @transaction.atomic
 def crear_checkout(request):
+    expirar_pedidos_pendientes(request.user)
     public_key = settings.WOMPI_PUBLIC_KEY
     integrity_secret = settings.WOMPI_INTEGRITY_SECRET
 
@@ -222,7 +239,10 @@ def webhook_wompi(request):
     except Pedido.DoesNotExist:
         return Response(status=status.HTTP_200_OK)
 
-    if int(pedido.total * 100) != transaccion.get("amount_in_cents"):
+    if (
+        int(pedido.total * 100) != transaccion.get("amount_in_cents")
+        or transaccion.get("currency") != "COP"
+    ):
         return Response(status=status.HTTP_400_BAD_REQUEST)
 
     pago = pedido.pago
@@ -230,10 +250,13 @@ def webhook_wompi(request):
     pago.estado = transaccion.get("status", "UNKNOWN")
     pago.save()
 
-    if pago.estado == "APPROVED":
+    if pago.estado == "APPROVED" and not pedido.inventario_liberado:
         pedido.estado = Pedido.Estado.CONFIRMADO
         pedido.save(update_fields=["estado"])
-    elif pago.estado in {"DECLINED", "VOIDED", "ERROR"}:
+    elif (
+        pago.estado in {"DECLINED", "VOIDED", "ERROR"}
+        and pedido.estado == Pedido.Estado.PENDIENTE_PAGO
+    ):
         liberar_inventario(pedido)
         pedido.estado = Pedido.Estado.PAGO_RECHAZADO
         pedido.save(update_fields=["estado"])
