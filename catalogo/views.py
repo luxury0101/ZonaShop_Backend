@@ -1,9 +1,6 @@
-from rest_framework.viewsets import (
-    ModelViewSet,
-    ReadOnlyModelViewSet,
-)
 from rest_framework import status
 from rest_framework.response import Response
+from rest_framework.viewsets import ModelViewSet
 
 from .models import Categoria, Producto
 from .permissions import EsAdministradorOConsulta
@@ -49,12 +46,18 @@ class CategoriaViewSet(ModelViewSet):
         )
 
 
-class ProductoViewSet(ReadOnlyModelViewSet):
+class ProductoViewSet(ModelViewSet):
     """
-    Consulta pública de productos.
+    CRUD de productos.
+
+    Las consultas son públicas.
+    Las modificaciones requieren administrador.
     """
 
     serializer_class = ProductoSerializer
+    permission_classes = [
+        EsAdministradorOConsulta,
+    ]
 
     def get_queryset(self):
         queryset = Producto.objects.select_related(
