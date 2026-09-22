@@ -51,6 +51,8 @@ INSTALLED_APPS = [
     # Módulos propios
     "catalogo",
     "cuentas",
+    "clientes",
+    "pedidos",
 
 ]
 
@@ -197,3 +199,12 @@ SPECTACULAR_SETTINGS = {
     ),
     "VERSION": "1.0.0",
 }
+
+# Wompi Sandbox
+WOMPI_PUBLIC_KEY = os.getenv("WOMPI_PUBLIC_KEY", "")
+WOMPI_INTEGRITY_SECRET = os.getenv("WOMPI_INTEGRITY_SECRET", "")
+WOMPI_EVENTS_SECRET = os.getenv("WOMPI_EVENTS_SECRET", "")
+WOMPI_REDIRECT_URL = os.getenv(
+    "WOMPI_REDIRECT_URL",
+    "http://localhost:5173/?pago=respuesta",
+)
