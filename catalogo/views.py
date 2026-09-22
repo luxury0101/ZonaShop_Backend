@@ -1,18 +1,59 @@
-from rest_framework.viewsets import ReadOnlyModelViewSet
+from rest_framework.viewsets import (
+    ModelViewSet,
+    ReadOnlyModelViewSet,
+)
+from rest_framework import status
+from rest_framework.response import Response
 
 from .models import Categoria, Producto
-from .serializers import CategoriaSerializer, ProductoSerializer
+from .permissions import EsAdministradorOConsulta
+from .serializers import (
+    CategoriaSerializer,
+    ProductoSerializer,
+)
 
 
-class CategoriaViewSet(ReadOnlyModelViewSet):
+class CategoriaViewSet(ModelViewSet):
     queryset = Categoria.objects.prefetch_related(
         "productos"
     ).all()
 
     serializer_class = CategoriaSerializer
+    permission_classes = [
+        EsAdministradorOConsulta,
+    ]
+
+    def destroy(self, request, *args, **kwargs):
+        categoria = self.get_object()
+
+        cantidad_productos = (
+            categoria.productos.count()
+        )
+
+        if cantidad_productos > 0:
+            return Response(
+                {
+                    "detail": (
+                        "No se puede eliminar esta categoría "
+                        f"porque tiene {cantidad_productos} "
+                        "producto(s) asociado(s)."
+                    )
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        self.perform_destroy(categoria)
+
+        return Response(
+            status=status.HTTP_204_NO_CONTENT,
+        )
 
 
 class ProductoViewSet(ReadOnlyModelViewSet):
+    """
+    Consulta pública de productos.
+    """
+
     serializer_class = ProductoSerializer
 
     def get_queryset(self):
