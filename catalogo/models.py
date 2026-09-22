@@ -38,6 +38,12 @@ class Producto(models.Model):
         default="",
     )
 
+    imagen = models.ImageField(
+        upload_to="productos/",
+        blank=True,
+        null=True,
+    )
+
     precio = models.DecimalField(
         max_digits=12,
         decimal_places=2,
