@@ -6,7 +6,7 @@ from decimal import Decimal
 from urllib.parse import urlencode
 
 from django.conf import settings
-from django.db import transaction
+from django.db import models, transaction
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
