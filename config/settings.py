@@ -32,6 +32,32 @@ def obtener_lista_entorno(nombre, valor_predeterminado=""):
     ]
 
 
+def obtener_booleano_entorno(nombre, valor_predeterminado=False):
+    valor = os.getenv(nombre)
+
+    if valor is None:
+        return valor_predeterminado
+
+    valor_normalizado = valor.strip().lower()
+    valores_validos = {
+        "true": True,
+        "1": True,
+        "yes": True,
+        "on": True,
+        "false": False,
+        "0": False,
+        "no": False,
+        "off": False,
+    }
+
+    if valor_normalizado not in valores_validos:
+        raise RuntimeError(
+            f"{nombre} debe contener un valor booleano válido."
+        )
+
+    return valores_validos[valor_normalizado]
+
+
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.1/howto/deployment/checklist/
 
@@ -45,7 +71,7 @@ if not SECRET_KEY:
     )
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.getenv("DJANGO_DEBUG", "False").lower() == "true"
+DEBUG = obtener_booleano_entorno("DJANGO_DEBUG", False)
 
 ALLOWED_HOSTS = obtener_lista_entorno(
     "DJANGO_ALLOWED_HOSTS",
@@ -168,8 +194,15 @@ MEDIA_ROOT = BASE_DIR / "media"
 # https://docs.djangoproject.com/en/6.1/topics/email/#topic-email-configuration
 
 MAILERS = {
-    'default': {
-        'BACKEND': 'django.core.mail.backends.console.EmailBackend',
+    "default": {
+        "BACKEND": os.getenv(
+            "DJANGO_EMAIL_BACKEND",
+            (
+                "django.core.mail.backends.console.EmailBackend"
+                if DEBUG
+                else "django.core.mail.backends.smtp.EmailBackend"
+            ),
+        ),
     },
 }
 
@@ -185,15 +218,58 @@ CSRF_TRUSTED_ORIGINS = obtener_lista_entorno(
 
 CORS_ALLOW_CREDENTIALS = True
 
-SESSION_COOKIE_HTTPONLY = False
+SESSION_COOKIE_HTTPONLY = True
 
-SESSION_COOKIE_SAMESITE = "Lax"
+CSRF_COOKIE_HTTPONLY = True
 
-CSRF_COOKIE_SAMESITE = "Lax"
+COOKIE_SAMESITE = os.getenv(
+    "DJANGO_COOKIE_SAMESITE",
+    "Lax",
+)
 
-SESSION_COOKIE_SECURE = False
+SESSION_COOKIE_SAMESITE = COOKIE_SAMESITE
 
-CSRF_COOKIE_SECURE = False
+CSRF_COOKIE_SAMESITE = COOKIE_SAMESITE
+
+COOKIES_SEGURAS = obtener_booleano_entorno(
+    "DJANGO_SECURE_COOKIES",
+    not DEBUG,
+)
+
+SESSION_COOKIE_SECURE = COOKIES_SEGURAS
+
+CSRF_COOKIE_SECURE = COOKIES_SEGURAS
+
+SECURE_SSL_REDIRECT = obtener_booleano_entorno(
+    "DJANGO_SECURE_SSL_REDIRECT",
+    not DEBUG,
+)
+
+SECURE_HSTS_SECONDS = int(
+    os.getenv(
+        "DJANGO_SECURE_HSTS_SECONDS",
+        "31536000" if not DEBUG else "0",
+    )
+)
+
+SECURE_HSTS_INCLUDE_SUBDOMAINS = obtener_booleano_entorno(
+    "DJANGO_SECURE_HSTS_INCLUDE_SUBDOMAINS",
+    not DEBUG,
+)
+
+SECURE_HSTS_PRELOAD = obtener_booleano_entorno(
+    "DJANGO_SECURE_HSTS_PRELOAD",
+    not DEBUG,
+)
+
+if obtener_booleano_entorno(
+    "DJANGO_TRUST_PROXY_SSL",
+    not DEBUG,
+):
+    SECURE_PROXY_SSL_HEADER = (
+        "HTTP_X_FORWARDED_PROTO",
+        "https",
+    )
 
 
 REST_FRAMEWORK = {

@@ -37,6 +37,14 @@ La API estará disponible en `http://localhost:8000/api/`.
 | `DATABASE_URL` | Cadena de conexión PostgreSQL. |
 | `CORS_ALLOWED_ORIGINS` | Orígenes autorizados, separados por comas. |
 | `CSRF_TRUSTED_ORIGINS` | Orígenes confiables para CSRF, separados por comas. |
+| `DJANGO_SECURE_COOKIES` | Restringe cookies de sesión y CSRF a HTTPS. |
+| `DJANGO_SECURE_SSL_REDIRECT` | Redirige las solicitudes HTTP hacia HTTPS. |
+| `DJANGO_SECURE_HSTS_SECONDS` | Duración de HSTS; debe permanecer en `0` durante desarrollo. |
+| `DJANGO_TRUST_PROXY_SSL` | Confía en `X-Forwarded-Proto` del proxy de producción. |
+| `DJANGO_COOKIE_SAMESITE` | Política `SameSite` de las cookies. |
+| `DJANGO_EMAIL_BACKEND` | Backend de correo; consola en desarrollo y SMTP en producción. |
+
+Los valores seguros se activan automáticamente cuando `DJANGO_DEBUG=False`. Antes de habilitar HSTS, confirma que el dominio y todos los subdominios funcionan permanentemente mediante HTTPS.
 
 ## Pruebas
 
