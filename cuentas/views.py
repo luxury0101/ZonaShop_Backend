@@ -30,9 +30,9 @@ def obtener_csrf(request):
     })
 
 
-@csrf_protect
 @api_view(["POST"])
 @permission_classes([AllowAny])
+@csrf_protect
 def iniciar_sesion(request):
     """
     Autentica exclusivamente usuarios administradores.
@@ -104,9 +104,9 @@ def iniciar_sesion(request):
     })
 
 
-@csrf_protect
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
+@csrf_protect
 def cerrar_sesion(request):
     """
     Cierra la sesión del administrador autenticado.
