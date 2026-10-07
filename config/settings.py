@@ -21,16 +21,36 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / ".env")
 
 
+def obtener_lista_entorno(nombre, valor_predeterminado=""):
+    return [
+        elemento.strip()
+        for elemento in os.getenv(
+            nombre,
+            valor_predeterminado,
+        ).split(",")
+        if elemento.strip()
+    ]
+
+
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.1/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY")
 
+if not SECRET_KEY:
+    raise RuntimeError(
+        "No se encontró DJANGO_SECRET_KEY. "
+        "Verifica el archivo .env."
+    )
+
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv("DJANGO_DEBUG", "False").lower() == "true"
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = obtener_lista_entorno(
+    "DJANGO_ALLOWED_HOSTS",
+    "localhost,127.0.0.1",
+)
 
 
 # Application definition
@@ -153,13 +173,15 @@ MAILERS = {
     },
 }
 
-CORS_ALLOWED_ORIGINS = [
+CORS_ALLOWED_ORIGINS = obtener_lista_entorno(
+    "CORS_ALLOWED_ORIGINS",
     "http://localhost:5173",
-]
+)
 
-CSRF_TRUSTED_ORIGINS = [
+CSRF_TRUSTED_ORIGINS = obtener_lista_entorno(
+    "CSRF_TRUSTED_ORIGINS",
     "http://localhost:5173",
-]
+)
 
 CORS_ALLOW_CREDENTIALS = True
 
