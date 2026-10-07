@@ -7,7 +7,7 @@ from rest_framework.test import APIClient, APITestCase
 
 from catalogo.models import Categoria, Producto
 
-from .models import ItemCarrito, PerfilUsuario
+from .models import ItemCarrito, Pedido, PerfilUsuario
 
 
 class AutenticacionApiTests(APITestCase):
@@ -168,5 +168,97 @@ class AutenticacionApiTests(APITestCase):
             "/api/auth/logout/",
             "/api/auth/me/",
             "/api/auth/carrito/",
+            "/api/auth/pedidos/",
         ]:
             self.assertIn(ruta, rutas)
+
+    def test_pago_recalcula_total_descuenta_stock_y_vacia_carrito(self):
+        categoria = Categoria.objects.create(nombre="Pago")
+        producto = Producto.objects.create(
+            categoria=categoria,
+            nombre="Chaqueta",
+            precio=Decimal("75000.00"),
+            existencias=4,
+        )
+        ItemCarrito.objects.create(
+            usuario=self.usuario,
+            producto=producto,
+            cantidad=2,
+        )
+        self.client.force_login(self.usuario)
+
+        respuesta = self.client.post(
+            reverse("cuentas:pedidos"),
+            {
+                "items": [
+                    {"id": producto.id, "cantidad": 2},
+                ],
+                "total": "1.00",
+                "numeroTarjeta": "4111111111111111",
+            },
+            format="json",
+        )
+
+        self.assertEqual(respuesta.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(Decimal(respuesta.data["total"]), Decimal("150000.00"))
+        self.assertEqual(respuesta.data["estado"], Pedido.Estado.PAGADO)
+        producto.refresh_from_db()
+        self.assertEqual(producto.existencias, 2)
+        self.assertFalse(ItemCarrito.objects.filter(usuario=self.usuario).exists())
+        pedido = Pedido.objects.get(usuario=self.usuario)
+        self.assertEqual(pedido.items.get().precio_unitario, Decimal("75000.00"))
+
+    def test_pago_sin_stock_es_atomico_y_no_crea_pedido(self):
+        categoria = Categoria.objects.create(nombre="Sin stock")
+        producto = Producto.objects.create(
+            categoria=categoria,
+            nombre="Tenis",
+            precio=Decimal("120000.00"),
+            existencias=1,
+        )
+        self.client.force_login(self.usuario)
+
+        respuesta = self.client.post(
+            reverse("cuentas:pedidos"),
+            {"items": [{"id": producto.id, "cantidad": 2}]},
+            format="json",
+        )
+
+        self.assertEqual(respuesta.status_code, status.HTTP_409_CONFLICT)
+        self.assertIn("Tenis", respuesta.data["detail"])
+        producto.refresh_from_db()
+        self.assertEqual(producto.existencias, 1)
+        self.assertFalse(Pedido.objects.exists())
+
+    def test_historial_de_pedidos_pertenece_al_usuario(self):
+        Pedido.objects.create(
+            usuario=self.usuario,
+            total=Decimal("40000.00"),
+        )
+        Pedido.objects.create(
+            usuario=self.administrador,
+            total=Decimal("90000.00"),
+        )
+        self.client.force_login(self.usuario)
+
+        respuesta = self.client.get(reverse("cuentas:pedidos"))
+
+        self.assertEqual(respuesta.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(respuesta.data), 1)
+        self.assertEqual(Decimal(respuesta.data[0]["total"]), Decimal("40000.00"))
+
+    def test_compra_requiere_sesion_y_csrf(self):
+        ruta = reverse("cuentas:pedidos")
+        datos = {"items": [{"id": 999, "cantidad": 1}]}
+        anonimo = APIClient(enforce_csrf_checks=True)
+        self.assertIn(
+            anonimo.post(ruta, datos, format="json").status_code,
+            [status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN],
+        )
+
+        cliente = APIClient(enforce_csrf_checks=True)
+        cliente.force_login(self.usuario)
+        self.assertEqual(
+            cliente.post(ruta, datos, format="json").status_code,
+            status.HTTP_403_FORBIDDEN,
+        )

@@ -1,3 +1,5 @@
+import uuid
+
 from django.conf import settings
 from django.db import models
 
@@ -59,3 +61,53 @@ class ItemCarrito(models.Model):
 
     def __str__(self):
         return f"{self.usuario.username}: {self.producto} x {self.cantidad}"
+
+
+class Pedido(models.Model):
+    class Estado(models.TextChoices):
+        PAGADO = "pagado", "Pagado"
+
+    numero = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    usuario = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="pedidos",
+    )
+    total = models.DecimalField(max_digits=12, decimal_places=2)
+    estado = models.CharField(
+        max_length=20,
+        choices=Estado.choices,
+        default=Estado.PAGADO,
+    )
+    creado_en = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-creado_en", "-id"]
+
+    def __str__(self):
+        return f"Pedido {str(self.numero)[:8]} - {self.usuario.username}"
+
+
+class ItemPedido(models.Model):
+    pedido = models.ForeignKey(
+        Pedido,
+        on_delete=models.CASCADE,
+        related_name="items",
+    )
+    producto = models.ForeignKey(
+        "catalogo.Producto",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="items_pedido",
+    )
+    nombre_producto = models.CharField(max_length=150)
+    precio_unitario = models.DecimalField(max_digits=12, decimal_places=2)
+    cantidad = models.PositiveIntegerField()
+    subtotal = models.DecimalField(max_digits=12, decimal_places=2)
+
+    class Meta:
+        ordering = ["id"]
+
+    def __str__(self):
+        return f"{self.nombre_producto} x {self.cantidad}"

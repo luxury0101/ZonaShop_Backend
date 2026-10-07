@@ -16,9 +16,10 @@ from rest_framework.response import Response
 
 from catalogo.models import Producto
 
-from .models import IntentoInicioSesion, ItemCarrito
+from .models import IntentoInicioSesion, ItemCarrito, ItemPedido, Pedido
 from .serializers import (
     CierreSesionSerializer,
+    CompraSimuladaSerializer,
     CredencialesSerializer,
     CsrfTokenSerializer,
     ErrorSerializer,
@@ -26,6 +27,7 @@ from .serializers import (
     FusionCarritoSerializer,
     InicioSesionSerializer,
     ItemCarritoSerializer,
+    PedidoSerializer,
     RegistroUsuarioSerializer,
     obtener_rol,
 )
@@ -224,4 +226,97 @@ def carrito_usuario(request):
             item.cantidad = item.producto.existencias
             item.save(update_fields=["cantidad", "actualizado_en"])
         items_validos.append(item)
-    return Response(ItemCarritoSerializer(items_validos, many=True).data)
+    return Response(
+        ItemCarritoSerializer(
+            items_validos,
+            many=True,
+            context={"request": request},
+        ).data
+    )
+
+
+@extend_schema(
+    summary="Listar pedidos o completar una compra simulada",
+    request=CompraSimuladaSerializer,
+    responses={200: PedidoSerializer(many=True), 201: PedidoSerializer},
+)
+@api_view(["GET", "POST"])
+@permission_classes([IsAuthenticated])
+@csrf_protect
+@transaction.atomic
+def pedidos_usuario(request):
+    if request.method == "GET":
+        pedidos = Pedido.objects.filter(usuario=request.user).prefetch_related(
+            "items"
+        )
+        return Response(PedidoSerializer(pedidos, many=True).data)
+
+    serializer = CompraSimuladaSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    cantidades = {
+        item["id"]: item["cantidad"]
+        for item in serializer.validated_data["items"]
+    }
+
+    productos = {
+        producto.id: producto
+        for producto in Producto.objects.select_for_update()
+        .filter(id__in=cantidades)
+        .order_by("id")
+    }
+    faltantes = set(cantidades) - set(productos)
+    if faltantes:
+        return Response(
+            {"detail": "Uno de los productos ya no está disponible."},
+            status=status.HTTP_409_CONFLICT,
+        )
+
+    for producto_id, cantidad in cantidades.items():
+        producto = productos[producto_id]
+        if producto.existencias < cantidad:
+            return Response(
+                {
+                    "detail": (
+                        f"No hay stock suficiente de {producto.nombre}. "
+                        f"Solo quedan {producto.existencias} unidades disponibles."
+                    ),
+                    "producto": producto.nombre,
+                    "disponibles": producto.existencias,
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
+
+    total = sum(
+        productos[producto_id].precio * cantidad
+        for producto_id, cantidad in cantidades.items()
+    )
+    pedido = Pedido.objects.create(
+        usuario=request.user,
+        total=total,
+        estado=Pedido.Estado.PAGADO,
+    )
+
+    items_pedido = []
+    for producto_id, cantidad in cantidades.items():
+        producto = productos[producto_id]
+        subtotal = producto.precio * cantidad
+        items_pedido.append(
+            ItemPedido(
+                pedido=pedido,
+                producto=producto,
+                nombre_producto=producto.nombre,
+                precio_unitario=producto.precio,
+                cantidad=cantidad,
+                subtotal=subtotal,
+            )
+        )
+        producto.existencias -= cantidad
+        producto.save(update_fields=["existencias"])
+
+    ItemPedido.objects.bulk_create(items_pedido)
+    ItemCarrito.objects.filter(usuario=request.user).delete()
+
+    # Aquí se confirmaría el pago con Stripe, Mercado Pago, Wompi o PayU.
+    # Este endpoint no recibe ni almacena números de tarjeta o códigos CVV.
+    pedido = Pedido.objects.prefetch_related("items").get(pk=pedido.pk)
+    return Response(PedidoSerializer(pedido).data, status=status.HTTP_201_CREATED)

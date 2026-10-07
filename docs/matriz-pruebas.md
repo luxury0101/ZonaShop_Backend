@@ -39,6 +39,10 @@ GitHub Actions ejecuta estos controles en cada `push` y solicitud de cambio.
 | PR-12 | Informar fallos de conexión | Prueba del cliente HTTP y mensajes visibles del catálogo y carrito. | Automatizado y revisión visual |
 | PR-13 | Acceder desde otro dispositivo | Requiere dirección pública y HTTPS. | Pendiente de despliegue |
 | PR-14 | Conservar datos después de redespliegue | Requiere PostgreSQL y entorno publicado. | Pendiente de despliegue |
+| PR-15 | Recalcular pedido y descontar stock | `test_pago_recalcula_total_descuenta_stock_y_vacia_carrito`. | Automatizado |
+| PR-16 | Cancelar compra completa sin stock | `test_pago_sin_stock_es_atomico_y_no_crea_pedido`. | Automatizado |
+| PR-17 | Consultar solo los pedidos del usuario | `test_historial_de_pedidos_pertenece_al_usuario`. | Automatizado |
+| PR-18 | Pagar sin sesión conserva el carrito y abre login | Prueba DOM del flujo de carrito. | Automatizado |
 
 ## Control previo al despliegue
 

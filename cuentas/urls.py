@@ -6,6 +6,7 @@ from .views import (
     consultar_sesion,
     iniciar_sesion,
     obtener_csrf,
+    pedidos_usuario,
     registrar_usuario,
 )
 
@@ -19,4 +20,5 @@ urlpatterns = [
     path("logout/", cerrar_sesion, name="cerrar-sesion"),
     path("me/", consultar_sesion, name="consultar-sesion"),
     path("carrito/", carrito_usuario, name="carrito"),
+    path("pedidos/", pedidos_usuario, name="pedidos"),
 ]

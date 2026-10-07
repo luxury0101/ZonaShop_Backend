@@ -2,7 +2,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers
 
-from .models import ItemCarrito, PerfilUsuario
+from .models import ItemCarrito, ItemPedido, Pedido, PerfilUsuario
 
 
 Usuario = get_user_model()
@@ -135,7 +135,56 @@ class ItemCarritoSerializer(serializers.ModelSerializer):
         decimal_places=2,
     )
     existencias = serializers.IntegerField(source="producto.existencias")
+    imagen = serializers.ImageField(
+        source="producto.imagen",
+        read_only=True,
+        allow_null=True,
+    )
 
     class Meta:
         model = ItemCarrito
-        fields = ["id", "nombre", "precio", "existencias", "cantidad"]
+        fields = [
+            "id",
+            "nombre",
+            "precio",
+            "existencias",
+            "cantidad",
+            "imagen",
+        ]
+
+
+class CompraSimuladaSerializer(serializers.Serializer):
+    items = ItemCarritoEntradaSerializer(many=True)
+
+    def validate_items(self, items):
+        if not items:
+            raise serializers.ValidationError("El carrito está vacío.")
+
+        ids = [item["id"] for item in items]
+        if len(ids) != len(set(ids)):
+            raise serializers.ValidationError(
+                "El carrito contiene productos duplicados."
+            )
+        return items
+
+
+class ItemPedidoSerializer(serializers.ModelSerializer):
+    producto_id = serializers.IntegerField(read_only=True, allow_null=True)
+
+    class Meta:
+        model = ItemPedido
+        fields = [
+            "producto_id",
+            "nombre_producto",
+            "precio_unitario",
+            "cantidad",
+            "subtotal",
+        ]
+
+
+class PedidoSerializer(serializers.ModelSerializer):
+    items = ItemPedidoSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Pedido
+        fields = ["numero", "total", "estado", "creado_en", "items"]

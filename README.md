@@ -1,6 +1,6 @@
 # ZonaShop Backend
 
-API REST de ZonaShop desarrollada con Django y Django REST Framework. Gestiona el catálogo, la autenticación unificada, los roles, el carrito por cuenta y la documentación OpenAPI.
+API REST de ZonaShop desarrollada con Django y Django REST Framework. Gestiona el catálogo, la autenticación unificada, los roles, el carrito, los pedidos y la documentación OpenAPI.
 
 ## Requisitos
 
@@ -69,7 +69,7 @@ Con el servidor en ejecución:
 ## Estructura principal
 
 - `catalogo/`: categorías, productos, existencias y permisos.
-- `cuentas/`: registro, sesión, roles, protección CSRF, fuerza bruta y carrito.
+- `cuentas/`: registro, sesión, roles, protección CSRF, fuerza bruta, carrito y pedidos.
 - `config/`: configuración, rutas y entornos de Django.
 
 ## Documentación técnica
@@ -84,8 +84,17 @@ Con el servidor en ejecución:
 - Sesión actual: `GET /api/auth/me/`.
 - Cierre de sesión: `POST /api/auth/logout/`.
 - Carrito de la cuenta: `GET/PUT /api/auth/carrito/`.
+- Historial de pedidos: `GET /api/auth/pedidos/`.
+- Compra simulada: `POST /api/auth/pedidos/` (recibe solo productos y cantidades).
 
 Las contraseñas nuevas se almacenan con Argon2. Los roles disponibles son
 `cliente` y `administrador`; el registro público siempre crea clientes. Para
 promover una cuenta, cambia el campo `rol` de su `PerfilUsuario` desde Django
 Admin. Las operaciones de escritura del catálogo validan este rol en el servidor.
+
+## Pedidos y pago simulado
+
+El servidor bloquea los productos durante la compra, verifica existencias,
+recalcula cada precio y el total, crea el pedido, descuenta el stock y vacía el
+carrito dentro de una única transacción. La simulación nunca recibe ni almacena
+el número de tarjeta, la fecha de vencimiento o el CVV.
