@@ -68,3 +68,8 @@ Con el servidor en ejecución:
 - `catalogo/`: categorías, productos, existencias y permisos.
 - `cuentas/`: sesión administrativa y protección CSRF.
 - `config/`: configuración, rutas y entornos de Django.
+
+## Documentación técnica
+
+- [Arquitectura y decisiones](docs/arquitectura.md)
+- [Matriz de pruebas](docs/matriz-pruebas.md)
