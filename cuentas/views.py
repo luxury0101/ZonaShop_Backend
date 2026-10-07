@@ -15,8 +15,22 @@ from rest_framework.permissions import (
     IsAuthenticated,
 )
 from rest_framework.response import Response
+from drf_spectacular.utils import extend_schema
+
+from .serializers import (
+    CierreSesionSerializer,
+    CredencialesSerializer,
+    CsrfTokenSerializer,
+    ErrorSerializer,
+    EstadoSesionSerializer,
+    InicioSesionSerializer,
+)
 
 
+@extend_schema(
+    summary="Obtener token CSRF",
+    responses={200: CsrfTokenSerializer},
+)
 @ensure_csrf_cookie
 @api_view(["GET"])
 @permission_classes([AllowAny])
@@ -30,6 +44,16 @@ def obtener_csrf(request):
     })
 
 
+@extend_schema(
+    summary="Iniciar sesión administrativa",
+    request=CredencialesSerializer,
+    responses={
+        200: InicioSesionSerializer,
+        400: ErrorSerializer,
+        401: ErrorSerializer,
+        403: ErrorSerializer,
+    },
+)
 @api_view(["POST"])
 @permission_classes([AllowAny])
 @csrf_protect
@@ -104,6 +128,14 @@ def iniciar_sesion(request):
     })
 
 
+@extend_schema(
+    summary="Cerrar sesión administrativa",
+    request=None,
+    responses={
+        200: CierreSesionSerializer,
+        403: ErrorSerializer,
+    },
+)
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 @csrf_protect
@@ -119,6 +151,10 @@ def cerrar_sesion(request):
     })
 
 
+@extend_schema(
+    summary="Consultar sesión administrativa",
+    responses={200: EstadoSesionSerializer},
+)
 @api_view(["GET"])
 @permission_classes([AllowAny])
 def consultar_sesion(request):

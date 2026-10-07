@@ -89,3 +89,18 @@ class AutenticacionApiTests(APITestCase):
         )
 
         self.assertEqual(respuesta.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_openapi_incluye_endpoints_de_autenticacion(self):
+        respuesta = self.client.get(
+            reverse("schema"),
+            HTTP_ACCEPT="application/vnd.oai.openapi+json",
+        )
+
+        self.assertEqual(respuesta.status_code, status.HTTP_200_OK)
+        rutas = respuesta.json()["paths"]
+
+        self.assertIn("/api/auth/csrf/", rutas)
+        self.assertIn("get", rutas["/api/auth/csrf/"])
+        self.assertIn("post", rutas["/api/auth/login/"])
+        self.assertIn("post", rutas["/api/auth/logout/"])
+        self.assertIn("get", rutas["/api/auth/me/"])
