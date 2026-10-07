@@ -3,7 +3,7 @@ from decimal import Decimal
 from django.contrib.auth import get_user_model
 from django.urls import reverse
 from rest_framework import status
-from rest_framework.test import APITestCase
+from rest_framework.test import APIClient, APITestCase
 
 from .models import Categoria, Producto
 
@@ -158,3 +158,45 @@ class CatalogoApiTests(APITestCase):
         self.assertFalse(
             Categoria.objects.filter(pk=self.otra_categoria.id).exists()
         )
+
+    def test_modificacion_con_sesion_requiere_csrf(self):
+        cliente = APIClient(enforce_csrf_checks=True)
+        csrf = cliente.get(reverse("cuentas:obtener-csrf"))
+        login = cliente.post(
+            reverse("cuentas:iniciar-sesion"),
+            {"username": "admin", "password": "clave-segura"},
+            format="json",
+            HTTP_X_CSRFTOKEN=csrf.data["csrfToken"],
+        )
+        self.assertEqual(login.status_code, status.HTTP_200_OK)
+
+        sin_csrf = cliente.patch(
+            reverse("producto-detail", args=[self.producto.id]),
+            {"precio": "70000.00"},
+            format="json",
+        )
+        self.assertEqual(sin_csrf.status_code, status.HTTP_403_FORBIDDEN)
+
+        con_csrf = cliente.patch(
+            reverse("producto-detail", args=[self.producto.id]),
+            {"precio": "70000.00"},
+            format="json",
+            HTTP_X_CSRFTOKEN=login.data["csrfToken"],
+        )
+        self.assertEqual(con_csrf.status_code, status.HTTP_200_OK)
+
+    def test_contenido_html_se_conserva_como_texto(self):
+        self.client.force_authenticate(self.administrador)
+        contenido = '<img src=x onerror="alert(1)">'
+
+        respuesta = self.client.post(
+            reverse("categoria-list"),
+            {
+                "nombre": "Contenido seguro",
+                "descripcion": contenido,
+            },
+            format="json",
+        )
+
+        self.assertEqual(respuesta.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(respuesta.data["descripcion"], contenido)
