@@ -43,6 +43,8 @@ GitHub Actions ejecuta estos controles en cada `push` y solicitud de cambio.
 | PR-16 | Cancelar compra completa sin stock | `test_pago_sin_stock_es_atomico_y_no_crea_pedido`. | Automatizado |
 | PR-17 | Consultar solo los pedidos del usuario | `test_historial_de_pedidos_pertenece_al_usuario`. | Automatizado |
 | PR-18 | Pagar sin sesión conserva el carrito y abre login | Prueba DOM del flujo de carrito. | Automatizado |
+| PR-19 | Actualizar perfil, dirección y contraseña | `test_actualiza_perfil_direccion_y_password_manteniendo_sesion`. | Automatizado |
+| PR-20 | Restringir y gestionar pedidos administrativos | `test_solo_administrador_lista_y_actualiza_pedidos`. | Automatizado |
 
 ## Control previo al despliegue
 

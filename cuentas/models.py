@@ -19,6 +19,12 @@ class PerfilUsuario(models.Model):
         choices=Rol.choices,
         default=Rol.CLIENTE,
     )
+    telefono = models.CharField(max_length=20, blank=True, default="")
+    direccion = models.CharField(max_length=255, blank=True, default="")
+    ciudad = models.CharField(max_length=100, blank=True, default="")
+    departamento = models.CharField(max_length=100, blank=True, default="")
+    codigo_postal = models.CharField(max_length=20, blank=True, default="")
+    instrucciones_envio = models.TextField(blank=True, default="")
 
     def __str__(self):
         return f"{self.usuario.username} ({self.get_rol_display()})"
@@ -66,6 +72,10 @@ class ItemCarrito(models.Model):
 class Pedido(models.Model):
     class Estado(models.TextChoices):
         PAGADO = "pagado", "Pagado"
+        PREPARANDO = "preparando", "Preparando"
+        ENVIADO = "enviado", "Enviado"
+        ENTREGADO = "entregado", "Entregado"
+        CANCELADO = "cancelado", "Cancelado"
 
     numero = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
     usuario = models.ForeignKey(
@@ -80,6 +90,13 @@ class Pedido(models.Model):
         default=Estado.PAGADO,
     )
     creado_en = models.DateTimeField(auto_now_add=True)
+    destinatario = models.CharField(max_length=150, default="")
+    telefono_envio = models.CharField(max_length=20, default="")
+    direccion_envio = models.CharField(max_length=255, default="")
+    ciudad_envio = models.CharField(max_length=100, default="")
+    departamento_envio = models.CharField(max_length=100, default="")
+    codigo_postal_envio = models.CharField(max_length=20, blank=True, default="")
+    instrucciones_envio = models.TextField(blank=True, default="")
 
     class Meta:
         ordering = ["-creado_en", "-id"]

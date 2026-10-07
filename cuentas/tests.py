@@ -31,6 +31,17 @@ class AutenticacionApiTests(APITestCase):
         self.assertEqual(respuesta.status_code, status.HTTP_200_OK)
         return cliente, respuesta.data["csrfToken"]
 
+    def datos_envio(self):
+        return {
+            "destinatario": "Cliente ZonaShop",
+            "telefono": "3001234567",
+            "direccion": "Calle 10 # 20-30",
+            "ciudad": "Bogotá",
+            "departamento": "Cundinamarca",
+            "codigo_postal": "110111",
+            "instrucciones": "Portería",
+        }
+
     def test_registro_crea_cliente_con_password_hasheado_y_sesion(self):
         cliente, token = self.cliente_con_csrf()
         respuesta = cliente.post(
@@ -193,6 +204,8 @@ class AutenticacionApiTests(APITestCase):
                 "items": [
                     {"id": producto.id, "cantidad": 2},
                 ],
+                "envio": self.datos_envio(),
+                "guardarDireccion": True,
                 "total": "1.00",
                 "numeroTarjeta": "4111111111111111",
             },
@@ -207,6 +220,9 @@ class AutenticacionApiTests(APITestCase):
         self.assertFalse(ItemCarrito.objects.filter(usuario=self.usuario).exists())
         pedido = Pedido.objects.get(usuario=self.usuario)
         self.assertEqual(pedido.items.get().precio_unitario, Decimal("75000.00"))
+        self.assertEqual(pedido.direccion_envio, "Calle 10 # 20-30")
+        self.usuario.refresh_from_db()
+        self.assertEqual(self.usuario.perfil_zonashop.ciudad, "Bogotá")
 
     def test_pago_sin_stock_es_atomico_y_no_crea_pedido(self):
         categoria = Categoria.objects.create(nombre="Sin stock")
@@ -220,7 +236,10 @@ class AutenticacionApiTests(APITestCase):
 
         respuesta = self.client.post(
             reverse("cuentas:pedidos"),
-            {"items": [{"id": producto.id, "cantidad": 2}]},
+            {
+                "items": [{"id": producto.id, "cantidad": 2}],
+                "envio": self.datos_envio(),
+            },
             format="json",
         )
 
@@ -249,7 +268,10 @@ class AutenticacionApiTests(APITestCase):
 
     def test_compra_requiere_sesion_y_csrf(self):
         ruta = reverse("cuentas:pedidos")
-        datos = {"items": [{"id": 999, "cantidad": 1}]}
+        datos = {
+            "items": [{"id": 999, "cantidad": 1}],
+            "envio": self.datos_envio(),
+        }
         anonimo = APIClient(enforce_csrf_checks=True)
         self.assertIn(
             anonimo.post(ruta, datos, format="json").status_code,
@@ -262,3 +284,63 @@ class AutenticacionApiTests(APITestCase):
             cliente.post(ruta, datos, format="json").status_code,
             status.HTTP_403_FORBIDDEN,
         )
+
+    def test_actualiza_perfil_direccion_y_password_manteniendo_sesion(self):
+        self.client.force_login(self.usuario)
+        respuesta = self.client.patch(
+            reverse("cuentas:perfil"),
+            {
+                "nombre": "Cliente Actualizado",
+                "email": "nuevo@zonashop.test",
+                "telefono": "3101234567",
+                "direccion": "Carrera 7 # 10-20",
+                "ciudad": "Medellín",
+                "departamento": "Antioquia",
+                "codigo_postal": "050001",
+                "instrucciones_envio": "Apartamento 301",
+                "passwordActual": "clave-segura",
+                "passwordNueva": "NuevaClave2026!",
+                "passwordConfirmacion": "NuevaClave2026!",
+            },
+            format="json",
+        )
+        self.assertEqual(respuesta.status_code, status.HTTP_200_OK)
+        self.usuario.refresh_from_db()
+        self.assertEqual(self.usuario.email, "nuevo@zonashop.test")
+        self.assertEqual(self.usuario.username, "nuevo@zonashop.test")
+        self.assertTrue(self.usuario.check_password("NuevaClave2026!"))
+        self.assertEqual(self.usuario.perfil_zonashop.ciudad, "Medellín")
+        self.assertTrue(
+            self.client.get(reverse("cuentas:consultar-sesion")).data["autenticado"]
+        )
+
+    def test_solo_administrador_lista_y_actualiza_pedidos(self):
+        pedido = Pedido.objects.create(
+            usuario=self.usuario,
+            total=Decimal("40000.00"),
+            **{
+                "destinatario": self.datos_envio()["destinatario"],
+                "telefono_envio": self.datos_envio()["telefono"],
+                "direccion_envio": self.datos_envio()["direccion"],
+                "ciudad_envio": self.datos_envio()["ciudad"],
+                "departamento_envio": self.datos_envio()["departamento"],
+            },
+        )
+        self.client.force_login(self.usuario)
+        self.assertEqual(
+            self.client.get(reverse("cuentas:pedidos-administracion")).status_code,
+            status.HTTP_403_FORBIDDEN,
+        )
+
+        self.client.force_login(self.administrador)
+        listado = self.client.get(reverse("cuentas:pedidos-administracion"))
+        self.assertEqual(listado.status_code, status.HTTP_200_OK)
+        self.assertEqual(listado.data[0]["cliente"]["email"], self.usuario.email)
+        actualizacion = self.client.patch(
+            reverse("cuentas:actualizar-estado-pedido", kwargs={"numero": pedido.numero}),
+            {"estado": Pedido.Estado.ENVIADO},
+            format="json",
+        )
+        self.assertEqual(actualizacion.status_code, status.HTTP_200_OK)
+        pedido.refresh_from_db()
+        self.assertEqual(pedido.estado, Pedido.Estado.ENVIADO)

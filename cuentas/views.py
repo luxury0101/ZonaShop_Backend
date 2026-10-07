@@ -2,7 +2,13 @@ from datetime import timedelta
 from math import ceil
 
 from django.conf import settings
-from django.contrib.auth import authenticate, get_user_model, login, logout
+from django.contrib.auth import (
+    authenticate,
+    get_user_model,
+    login,
+    logout,
+    update_session_auth_hash,
+)
 from django.db import transaction
 from django.middleware.csrf import get_token
 from django.utils import timezone
@@ -16,7 +22,8 @@ from rest_framework.response import Response
 
 from catalogo.models import Producto
 
-from .models import IntentoInicioSesion, ItemCarrito, ItemPedido, Pedido
+from .models import IntentoInicioSesion, ItemCarrito, ItemPedido, Pedido, PerfilUsuario
+from .permissions import EsAdministrador
 from .serializers import (
     CierreSesionSerializer,
     CompraSimuladaSerializer,
@@ -28,7 +35,10 @@ from .serializers import (
     InicioSesionSerializer,
     ItemCarritoSerializer,
     PedidoSerializer,
+    PedidoAdministradorSerializer,
+    PerfilUsuarioSerializer,
     RegistroUsuarioSerializer,
+    EstadoPedidoSerializer,
     obtener_rol,
 )
 
@@ -180,6 +190,31 @@ def consultar_sesion(request):
 
 
 @extend_schema(
+    summary="Consultar o actualizar el perfil y la dirección principal",
+    request=PerfilUsuarioSerializer,
+    responses={200: PerfilUsuarioSerializer},
+)
+@api_view(["GET", "PATCH"])
+@permission_classes([IsAuthenticated])
+@csrf_protect
+@transaction.atomic
+def perfil_usuario(request):
+    obtener_rol(request.user)
+    perfil = PerfilUsuario.objects.select_related("usuario").get(usuario=request.user)
+    if request.method == "PATCH":
+        serializer = PerfilUsuarioSerializer(
+            perfil,
+            data=request.data,
+            partial=True,
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        if serializer.validated_data.get("passwordNueva"):
+            update_session_auth_hash(request, perfil.usuario)
+    return Response(PerfilUsuarioSerializer(perfil).data)
+
+
+@extend_schema(
     summary="Consultar o fusionar el carrito del usuario",
     request=FusionCarritoSerializer,
     responses={200: ItemCarritoSerializer(many=True)},
@@ -257,6 +292,7 @@ def pedidos_usuario(request):
         item["id"]: item["cantidad"]
         for item in serializer.validated_data["items"]
     }
+    envio = serializer.validated_data["envio"]
 
     productos = {
         producto.id: producto
@@ -294,7 +330,25 @@ def pedidos_usuario(request):
         usuario=request.user,
         total=total,
         estado=Pedido.Estado.PAGADO,
+        destinatario=envio["destinatario"],
+        telefono_envio=envio["telefono"],
+        direccion_envio=envio["direccion"],
+        ciudad_envio=envio["ciudad"],
+        departamento_envio=envio["departamento"],
+        codigo_postal_envio=envio.get("codigo_postal", ""),
+        instrucciones_envio=envio.get("instrucciones", ""),
     )
+
+    if serializer.validated_data["guardarDireccion"]:
+        obtener_rol(request.user)
+        perfil = request.user.perfil_zonashop
+        perfil.telefono = envio["telefono"]
+        perfil.direccion = envio["direccion"]
+        perfil.ciudad = envio["ciudad"]
+        perfil.departamento = envio["departamento"]
+        perfil.codigo_postal = envio.get("codigo_postal", "")
+        perfil.instrucciones_envio = envio.get("instrucciones", "")
+        perfil.save()
 
     items_pedido = []
     for producto_id, cantidad in cantidades.items():
@@ -320,3 +374,48 @@ def pedidos_usuario(request):
     # Este endpoint no recibe ni almacena números de tarjeta o códigos CVV.
     pedido = Pedido.objects.prefetch_related("items").get(pk=pedido.pk)
     return Response(PedidoSerializer(pedido).data, status=status.HTTP_201_CREATED)
+
+
+@extend_schema(
+    summary="Listar todos los pedidos para administración",
+    responses={200: PedidoAdministradorSerializer(many=True)},
+)
+@api_view(["GET"])
+@permission_classes([EsAdministrador])
+def pedidos_administracion(request):
+    pedidos = Pedido.objects.select_related("usuario").prefetch_related("items")
+    estado_filtro = request.query_params.get("estado", "").strip()
+    if estado_filtro:
+        estados_validos = {valor for valor, _ in Pedido.Estado.choices}
+        if estado_filtro not in estados_validos:
+            return Response(
+                {"detail": "El estado indicado no es válido."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        pedidos = pedidos.filter(estado=estado_filtro)
+    return Response(PedidoAdministradorSerializer(pedidos, many=True).data)
+
+
+@extend_schema(
+    summary="Actualizar el estado de un pedido",
+    request=EstadoPedidoSerializer,
+    responses={200: PedidoAdministradorSerializer},
+)
+@api_view(["PATCH"])
+@permission_classes([EsAdministrador])
+@csrf_protect
+def actualizar_estado_pedido(request, numero):
+    try:
+        pedido = Pedido.objects.select_related("usuario").prefetch_related("items").get(
+            numero=numero
+        )
+    except Pedido.DoesNotExist:
+        return Response(
+            {"detail": "El pedido no existe."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+    serializer = EstadoPedidoSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    pedido.estado = serializer.validated_data["estado"]
+    pedido.save(update_fields=["estado"])
+    return Response(PedidoAdministradorSerializer(pedido).data)

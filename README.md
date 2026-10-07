@@ -84,8 +84,11 @@ Con el servidor en ejecución:
 - Sesión actual: `GET /api/auth/me/`.
 - Cierre de sesión: `POST /api/auth/logout/`.
 - Carrito de la cuenta: `GET/PUT /api/auth/carrito/`.
+- Perfil y dirección principal: `GET/PATCH /api/auth/perfil/`.
 - Historial de pedidos: `GET /api/auth/pedidos/`.
 - Compra simulada: `POST /api/auth/pedidos/` (recibe solo productos y cantidades).
+- Administración de pedidos: `GET /api/auth/admin/pedidos/`.
+- Actualización de estado: `PATCH /api/auth/admin/pedidos/{numero}/`.
 
 Las contraseñas nuevas se almacenan con Argon2. Los roles disponibles son
 `cliente` y `administrador`; el registro público siempre crea clientes. Para
@@ -98,3 +101,7 @@ El servidor bloquea los productos durante la compra, verifica existencias,
 recalcula cada precio y el total, crea el pedido, descuenta el stock y vacía el
 carrito dentro de una única transacción. La simulación nunca recibe ni almacena
 el número de tarjeta, la fecha de vencimiento o el CVV.
+
+Cada pedido conserva una copia de los datos de envío utilizados. Los cambios
+posteriores realizados en el perfil no modifican pedidos históricos. Los estados
+disponibles son `pagado`, `preparando`, `enviado`, `entregado` y `cancelado`.

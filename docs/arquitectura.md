@@ -48,6 +48,7 @@ flowchart LR
 - `src/carrito/`: cantidades, importes, persistencia y revalidación.
 - `src/catalogo/`: presentación y detalle de productos.
 - `src/pedidos/`: historial y detalle de pedidos.
+- `src/perfil/`: datos personales, dirección principal y contraseña.
 - `src/ui/`: notificaciones accesibles compartidas.
 - `src/styles/`: estilos SCSS y comportamiento adaptable.
 
@@ -98,6 +99,9 @@ erDiagram
         bigint usuario_id FK
         decimal total
         string estado
+        string destinatario
+        string direccion_envio
+        string ciudad_envio
         datetime creado_en
     }
 
