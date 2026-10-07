@@ -3,6 +3,9 @@ from rest_framework.permissions import (
     SAFE_METHODS,
 )
 
+from cuentas.models import PerfilUsuario
+from cuentas.serializers import obtener_rol
+
 
 class EsAdministradorOConsulta(BasePermission):
     """
@@ -23,5 +26,5 @@ class EsAdministradorOConsulta(BasePermission):
 
         return (
             request.user.is_authenticated
-            and request.user.is_staff
+            and obtener_rol(request.user) == PerfilUsuario.Rol.ADMINISTRADOR
         )

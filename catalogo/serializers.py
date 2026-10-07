@@ -47,6 +47,7 @@ class ProductoSerializer(serializers.ModelSerializer):
             "imagen",
             "precio",
             "existencias",
+            "creado_en",
             "agotado",
         ]
 

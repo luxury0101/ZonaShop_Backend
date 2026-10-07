@@ -168,13 +168,24 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
+PASSWORD_HASHERS = [
+    "django.contrib.auth.hashers.Argon2PasswordHasher",
+    "django.contrib.auth.hashers.PBKDF2PasswordHasher",
+]
+
+LOGIN_MAX_ATTEMPTS = int(os.getenv("LOGIN_MAX_ATTEMPTS", "5"))
+LOGIN_ATTEMPT_WINDOW_SECONDS = int(
+    os.getenv("LOGIN_ATTEMPT_WINDOW_SECONDS", "900")
+)
+LOGIN_BLOCK_SECONDS = int(os.getenv("LOGIN_BLOCK_SECONDS", "900"))
+
 
 # Internationalization
 # https://docs.djangoproject.com/en/6.1/topics/i18n/
 
-LANGUAGE_CODE = 'en-us'
+LANGUAGE_CODE = "es-co"
 
-TIME_ZONE = 'UTC'
+TIME_ZONE = "America/Bogota"
 
 USE_I18N = True
 

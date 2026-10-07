@@ -1,6 +1,6 @@
 # ZonaShop Backend
 
-API REST de ZonaShop desarrollada con Django y Django REST Framework. Gestiona el catálogo, la autenticación administrativa, los permisos y la documentación OpenAPI.
+API REST de ZonaShop desarrollada con Django y Django REST Framework. Gestiona el catálogo, la autenticación unificada, los roles, el carrito por cuenta y la documentación OpenAPI.
 
 ## Requisitos
 
@@ -43,6 +43,9 @@ La API estará disponible en `http://localhost:8000/api/`.
 | `DJANGO_TRUST_PROXY_SSL` | Confía en `X-Forwarded-Proto` del proxy de producción. |
 | `DJANGO_COOKIE_SAMESITE` | Política `SameSite` de las cookies. |
 | `DJANGO_EMAIL_BACKEND` | Backend de correo; consola en desarrollo y SMTP en producción. |
+| `LOGIN_MAX_ATTEMPTS` | Intentos fallidos permitidos antes del bloqueo. |
+| `LOGIN_ATTEMPT_WINDOW_SECONDS` | Ventana para contabilizar intentos de acceso. |
+| `LOGIN_BLOCK_SECONDS` | Duración del bloqueo por fuerza bruta. |
 
 Los valores seguros se activan automáticamente cuando `DJANGO_DEBUG=False`. Antes de habilitar HSTS, confirma que el dominio y todos los subdominios funcionan permanentemente mediante HTTPS.
 
@@ -66,10 +69,23 @@ Con el servidor en ejecución:
 ## Estructura principal
 
 - `catalogo/`: categorías, productos, existencias y permisos.
-- `cuentas/`: sesión administrativa y protección CSRF.
+- `cuentas/`: registro, sesión, roles, protección CSRF, fuerza bruta y carrito.
 - `config/`: configuración, rutas y entornos de Django.
 
 ## Documentación técnica
 
 - [Arquitectura y decisiones](docs/arquitectura.md)
 - [Matriz de pruebas](docs/matriz-pruebas.md)
+
+## Autenticación y roles
+
+- Registro: `POST /api/auth/registro/`.
+- Login unificado: `POST /api/auth/login/`.
+- Sesión actual: `GET /api/auth/me/`.
+- Cierre de sesión: `POST /api/auth/logout/`.
+- Carrito de la cuenta: `GET/PUT /api/auth/carrito/`.
+
+Las contraseñas nuevas se almacenan con Argon2. Los roles disponibles son
+`cliente` y `administrador`; el registro público siempre crea clientes. Para
+promover una cuenta, cambia el campo `rol` de su `PerfilUsuario` desde Django
+Admin. Las operaciones de escritura del catálogo validan este rol en el servidor.

@@ -82,6 +82,8 @@ class ProductoViewSet(ModelViewSet):
             "buscar"
         )
 
+        orden = self.request.query_params.get("orden", "")
+
         if categoria_id:
             queryset = queryset.filter(
                 categoria_id=categoria_id
@@ -91,5 +93,12 @@ class ProductoViewSet(ModelViewSet):
             queryset = queryset.filter(
                 nombre__icontains=busqueda.strip()
             )
+
+        ordenamientos = {
+            "precio": ("precio", "id"),
+            "-precio": ("-precio", "-id"),
+            "": ("-creado_en", "-id"),
+        }
+        queryset = queryset.order_by(*ordenamientos.get(orden, ordenamientos[""]))
 
         return queryset

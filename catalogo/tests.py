@@ -6,6 +6,7 @@ from rest_framework import status
 from rest_framework.test import APIClient, APITestCase
 
 from .models import Categoria, Producto
+from cuentas.models import PerfilUsuario
 
 
 class CatalogoApiTests(APITestCase):
@@ -51,6 +52,18 @@ class CatalogoApiTests(APITestCase):
         self.assertEqual(len(respuesta.data), 1)
         self.assertEqual(respuesta.data[0]["nombre"], "Camiseta negra")
 
+    def test_catalogo_permite_ordenar_por_precio(self):
+        Producto.objects.create(
+            categoria=self.categoria,
+            nombre="Producto económico",
+            precio=Decimal("10000.00"),
+            existencias=2,
+        )
+        ascendente = self.client.get(reverse("producto-list"), {"orden": "precio"})
+        descendente = self.client.get(reverse("producto-list"), {"orden": "-precio"})
+        self.assertEqual(ascendente.data[0]["nombre"], "Producto económico")
+        self.assertEqual(descendente.data[0]["nombre"], "Camiseta negra")
+
     def test_usuario_anonimo_no_puede_crear_categorias(self):
         respuesta = self.client.post(
             reverse("categoria-list"),
@@ -73,6 +86,19 @@ class CatalogoApiTests(APITestCase):
         self.assertEqual(respuesta.status_code, status.HTTP_403_FORBIDDEN)
         self.producto.refresh_from_db()
         self.assertEqual(self.producto.precio, Decimal("50000.00"))
+
+    def test_rol_administrador_protege_las_modificaciones(self):
+        PerfilUsuario.objects.update_or_create(
+            usuario=self.usuario,
+            defaults={"rol": PerfilUsuario.Rol.ADMINISTRADOR},
+        )
+        self.client.force_authenticate(self.usuario)
+        respuesta = self.client.patch(
+            reverse("producto-detail", args=[self.producto.id]),
+            {"existencias": 10},
+            format="json",
+        )
+        self.assertEqual(respuesta.status_code, status.HTTP_200_OK)
 
     def test_administrador_puede_crear_y_editar_productos(self):
         self.client.force_authenticate(self.administrador)

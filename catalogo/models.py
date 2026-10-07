@@ -56,6 +56,11 @@ class Producto(models.Model):
         default=0,
     )
 
+    creado_en = models.DateTimeField(
+        auto_now_add=True,
+        null=True,
+    )
+
     class Meta:
         ordering = ["nombre"]
         verbose_name = "producto"
