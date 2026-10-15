@@ -1,57 +1,152 @@
 # ZonaShop Backend
 
-API REST de ZonaShop desarrollada con Django y Django REST Framework. Gestiona el catálogo, la autenticación unificada, los roles, el carrito, los pedidos y la documentación OpenAPI.
+API REST de ZonaShop desarrollada con Django y Django REST Framework. Gestiona
+el catálogo, usuarios, roles, carrito, pedidos, inventario y el pago simulado.
 
-## Requisitos
+## Guía rápida para trabajar en Windows
 
-- Python 3.12 o superior.
-- PostgreSQL.
-- Un entorno virtual de Python.
+Esta guía asume que se utilizará PowerShell y que el frontend se instalará en
+otra carpeta al lado de este repositorio.
 
-## Instalación en Windows
+### 1. Instalar los programas necesarios
+
+Antes de comenzar, instala:
+
+- [Git](https://git-scm.com/download/win).
+- [Python 3.12 o superior](https://www.python.org/downloads/). Durante la
+  instalación activa **Add Python to PATH**.
+- [PostgreSQL](https://www.postgresql.org/download/windows/). Conserva la
+  contraseña que asignes al usuario `postgres`.
+- Node.js se necesita para el frontend, no para este repositorio.
+
+Comprueba las instalaciones desde PowerShell:
 
 ```powershell
-python -m venv venv
-.\venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-Copy-Item .env.example .env
+git --version
+python --version
+psql --version
 ```
 
-Edita `.env` y configura una base PostgreSQL de desarrollo. No utilices credenciales de producción en el entorno local.
+Si `psql` no se reconoce, abre **SQL Shell (psql)** desde el menú Inicio o crea
+la base de datos con pgAdmin.
+
+### 2. Clonar los dos repositorios
+
+```powershell
+New-Item -ItemType Directory -Path ZonaShop -Force
+Set-Location ZonaShop
+git clone https://github.com/luxury0101/ZonaShop_Backend.git
+git clone https://github.com/luxury0101/ZonaShop_Front.git
+```
+
+La estructura debe quedar así:
+
+```text
+ZonaShop/
+├── ZonaShop_Backend/
+└── ZonaShop_Front/
+```
+
+### 3. Crear la base de datos de desarrollo
+
+Ejecuta estos comandos y escribe la contraseña del usuario `postgres` cuando se
+solicite:
+
+```powershell
+psql -U postgres -c "CREATE USER zonashop_dev WITH PASSWORD 'zonashop_dev';"
+psql -U postgres -c "CREATE DATABASE zonashop OWNER zonashop_dev;"
+```
+
+La contraseña anterior es únicamente para desarrollo local. Nunca debe usarse
+en producción. Si el usuario o la base ya existen, no necesitas recrearlos.
+
+### 4. Crear y activar el entorno virtual
+
+```powershell
+Set-Location ZonaShop_Backend
+python -m venv venv
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+.\venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+Cuando el entorno esté activo, PowerShell mostrará `(venv)` al inicio de la
+línea. Cada vez que abras otra terminal para el backend debes ejecutar:
+
+```powershell
+Set-Location ZonaShop_Backend
+.\venv\Scripts\Activate.ps1
+```
+
+### 5. Crear el archivo `.env`
+
+Desde la carpeta `ZonaShop_Backend`, copia y ejecuta todo este bloque:
+
+```powershell
+$zonashopSecret = python -c "import secrets; print(secrets.token_urlsafe(50))"
+@"
+DJANGO_SECRET_KEY=$zonashopSecret
+DJANGO_DEBUG=True
+DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1
+DATABASE_URL=postgresql://zonashop_dev:zonashop_dev@localhost:5432/zonashop
+CORS_ALLOWED_ORIGINS=http://localhost:5173
+CSRF_TRUSTED_ORIGINS=http://localhost:5173
+DJANGO_SECURE_COOKIES=False
+DJANGO_SECURE_SSL_REDIRECT=False
+DJANGO_SECURE_HSTS_SECONDS=0
+DJANGO_SECURE_HSTS_INCLUDE_SUBDOMAINS=False
+DJANGO_SECURE_HSTS_PRELOAD=False
+DJANGO_TRUST_PROXY_SSL=False
+DJANGO_COOKIE_SAMESITE=Lax
+DJANGO_EMAIL_BACKEND=django.core.mail.backends.console.EmailBackend
+LOGIN_MAX_ATTEMPTS=5
+LOGIN_ATTEMPT_WINDOW_SECONDS=900
+LOGIN_BLOCK_SECONDS=900
+"@ | Set-Content -Encoding utf8 .env
+```
+
+El archivo `.env` contiene información privada y está ignorado por Git. No se
+debe subir ni compartir por chat.
+
+### 6. Preparar Django
+
+Con `(venv)` activo, ejecuta:
 
 ```powershell
 python manage.py migrate
 python manage.py createsuperuser
+python manage.py check
+```
+
+`createsuperuser` solicitará correo, nombre de usuario y contraseña. Esa cuenta
+puede iniciar sesión desde el mismo formulario del frontend y tendrá acceso al
+panel administrativo.
+
+### 7. Iniciar el backend
+
+```powershell
 python manage.py runserver
 ```
 
-La API estará disponible en `http://localhost:8000/api/`.
+Déjalo ejecutándose. Las direcciones principales son:
 
-## Variables de entorno
+- API: `http://localhost:8000/api/`
+- Swagger: `http://localhost:8000/api/docs/`
+- Django Admin: `http://localhost:8000/admin/`
 
-| Variable | Propósito |
-| --- | --- |
-| `DJANGO_SECRET_KEY` | Clave privada utilizada por Django. |
-| `DJANGO_DEBUG` | Activa el modo de desarrollo cuando vale `True`. |
-| `DJANGO_ALLOWED_HOSTS` | Lista de hosts separados por comas. |
-| `DATABASE_URL` | Cadena de conexión PostgreSQL. |
-| `CORS_ALLOWED_ORIGINS` | Orígenes autorizados, separados por comas. |
-| `CSRF_TRUSTED_ORIGINS` | Orígenes confiables para CSRF, separados por comas. |
-| `DJANGO_SECURE_COOKIES` | Restringe cookies de sesión y CSRF a HTTPS. |
-| `DJANGO_SECURE_SSL_REDIRECT` | Redirige las solicitudes HTTP hacia HTTPS. |
-| `DJANGO_SECURE_HSTS_SECONDS` | Duración de HSTS; debe permanecer en `0` durante desarrollo. |
-| `DJANGO_TRUST_PROXY_SSL` | Confía en `X-Forwarded-Proto` del proxy de producción. |
-| `DJANGO_COOKIE_SAMESITE` | Política `SameSite` de las cookies. |
-| `DJANGO_EMAIL_BACKEND` | Backend de correo; consola en desarrollo y SMTP en producción. |
-| `LOGIN_MAX_ATTEMPTS` | Intentos fallidos permitidos antes del bloqueo. |
-| `LOGIN_ATTEMPT_WINDOW_SECONDS` | Ventana para contabilizar intentos de acceso. |
-| `LOGIN_BLOCK_SECONDS` | Duración del bloqueo por fuerza bruta. |
+Después abre una segunda terminal y sigue el README del frontend.
 
-Los valores seguros se activan automáticamente cuando `DJANGO_DEBUG=False`. Antes de habilitar HSTS, confirma que el dominio y todos los subdominios funcionan permanentemente mediante HTTPS.
+## Comandos de uso diario
 
-## Pruebas
+```powershell
+Set-Location ZonaShop_Backend
+.\venv\Scripts\Activate.ps1
+python manage.py migrate
+python manage.py runserver
+```
 
-Las pruebas usan una base SQLite en memoria y no modifican PostgreSQL:
+Para ejecutar las comprobaciones antes de subir cambios:
 
 ```powershell
 python manage.py test --settings=config.test_settings
@@ -59,49 +154,77 @@ python manage.py check
 python manage.py makemigrations --check --dry-run
 ```
 
-## Documentación de la API
+Las pruebas utilizan SQLite y no modifican la base PostgreSQL de desarrollo.
 
-Con el servidor en ejecución:
+## Variables de entorno
 
-- Esquema OpenAPI: `http://localhost:8000/api/schema/`
-- Swagger UI: `http://localhost:8000/api/docs/`
+| Variable | Propósito |
+| --- | --- |
+| `DJANGO_SECRET_KEY` | Clave privada utilizada por Django. |
+| `DJANGO_DEBUG` | Activa el modo de desarrollo cuando vale `True`. |
+| `DJANGO_ALLOWED_HOSTS` | Hosts autorizados, separados por comas. |
+| `DATABASE_URL` | Cadena de conexión PostgreSQL. |
+| `CORS_ALLOWED_ORIGINS` | Orígenes autorizados, separados por comas. |
+| `CSRF_TRUSTED_ORIGINS` | Orígenes confiables para CSRF. |
+| `DJANGO_SECURE_COOKIES` | Restringe las cookies a HTTPS. |
+| `DJANGO_SECURE_SSL_REDIRECT` | Redirige HTTP hacia HTTPS. |
+| `DJANGO_SECURE_HSTS_SECONDS` | Duración de HSTS; debe ser `0` localmente. |
+| `DJANGO_TRUST_PROXY_SSL` | Confía en el proxy HTTPS de producción. |
+| `DJANGO_COOKIE_SAMESITE` | Política `SameSite` de las cookies. |
+| `DJANGO_EMAIL_BACKEND` | Sistema utilizado para enviar correos. |
+| `LOGIN_MAX_ATTEMPTS` | Intentos fallidos permitidos. |
+| `LOGIN_ATTEMPT_WINDOW_SECONDS` | Ventana para contabilizar intentos. |
+| `LOGIN_BLOCK_SECONDS` | Duración del bloqueo por fuerza bruta. |
+
+Los valores seguros se activan automáticamente cuando `DJANGO_DEBUG=False`.
 
 ## Estructura principal
 
-- `catalogo/`: categorías, productos, existencias y permisos.
-- `cuentas/`: registro, sesión, roles, protección CSRF, fuerza bruta, carrito y pedidos.
+- `catalogo/`: categorías, productos, imágenes, existencias y permisos.
+- `cuentas/`: registro, sesión, roles, perfil, carrito, pedidos y compra.
 - `config/`: configuración, rutas y entornos de Django.
+- `docs/`: arquitectura y matriz de pruebas.
+- `media/`: imágenes subidas localmente; no forman parte del código.
+
+## Autenticación y pedidos
+
+- Registro: `POST /api/auth/registro/`.
+- Login: `POST /api/auth/login/`.
+- Sesión actual: `GET /api/auth/me/`.
+- Cierre de sesión: `POST /api/auth/logout/`.
+- Perfil: `GET/PATCH /api/auth/perfil/`.
+- Carrito: `GET/PUT /api/auth/carrito/`.
+- Pedidos y compra: `GET/POST /api/auth/pedidos/`.
+- Administración de pedidos: `GET /api/auth/admin/pedidos/`.
+
+Las contraseñas se almacenan con Argon2. El servidor recalcula los precios,
+valida el stock y crea el pedido dentro de una transacción. La simulación de
+pago nunca recibe ni almacena el número de tarjeta o el CVV.
+
+## Solución de problemas
+
+- **`python` no se reconoce:** reinstala Python activando **Add Python to PATH**.
+- **No se pueden ejecutar scripts:** vuelve a ejecutar
+  `Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass`.
+- **Error de conexión a PostgreSQL:** confirma que el servicio PostgreSQL esté
+  iniciado y que `DATABASE_URL` coincida con el usuario, contraseña y base.
+- **Puerto 8000 ocupado:** usa `python manage.py runserver 8001` y cambia también
+  `VITE_API_BASE_URL` en el frontend.
+- **El navegador rechaza la sesión:** utiliza `localhost` en ambos proyectos;
+  evita mezclar `localhost` con `127.0.0.1`.
+
+## Información que GitHub no incluye
+
+Al clonar se obtiene el código, pero no se descargan:
+
+- El archivo `.env`.
+- La base de datos local y sus usuarios.
+- Las imágenes existentes dentro de `media/`.
+
+Cada desarrollador debe crear su propia base, ejecutar las migraciones y crear
+su cuenta administrativa.
 
 ## Documentación técnica
 
 - [Arquitectura y decisiones](docs/arquitectura.md)
 - [Matriz de pruebas](docs/matriz-pruebas.md)
-
-## Autenticación y roles
-
-- Registro: `POST /api/auth/registro/`.
-- Login unificado: `POST /api/auth/login/`.
-- Sesión actual: `GET /api/auth/me/`.
-- Cierre de sesión: `POST /api/auth/logout/`.
-- Carrito de la cuenta: `GET/PUT /api/auth/carrito/`.
-- Perfil y dirección principal: `GET/PATCH /api/auth/perfil/`.
-- Historial de pedidos: `GET /api/auth/pedidos/`.
-- Compra simulada: `POST /api/auth/pedidos/` (recibe solo productos y cantidades).
-- Administración de pedidos: `GET /api/auth/admin/pedidos/`.
-- Actualización de estado: `PATCH /api/auth/admin/pedidos/{numero}/`.
-
-Las contraseñas nuevas se almacenan con Argon2. Los roles disponibles son
-`cliente` y `administrador`; el registro público siempre crea clientes. Para
-promover una cuenta, cambia el campo `rol` de su `PerfilUsuario` desde Django
-Admin. Las operaciones de escritura del catálogo validan este rol en el servidor.
-
-## Pedidos y pago simulado
-
-El servidor bloquea los productos durante la compra, verifica existencias,
-recalcula cada precio y el total, crea el pedido, descuenta el stock y vacía el
-carrito dentro de una única transacción. La simulación nunca recibe ni almacena
-el número de tarjeta, la fecha de vencimiento o el CVV.
-
-Cada pedido conserva una copia de los datos de envío utilizados. Los cambios
-posteriores realizados en el perfil no modifican pedidos históricos. Los estados
-disponibles son `pagado`, `preparando`, `enviado`, `entregado` y `cancelado`.
