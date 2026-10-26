@@ -1,6 +1,9 @@
 .env
+.env.production
 venv/
 __pycache__/
 *.pyc
 media/
 staticfiles/
+.vercel
+.env*
