@@ -276,6 +276,20 @@ CSRF_TRUSTED_ORIGINS = obtener_lista_entorno(
     "http://localhost:5173",
 )
 
+# Alias públicos del frontend en Vercel. Se mantienen de forma explícita para
+# que registro, login y administración funcionen aunque Vercel cambie cuál de
+# los dos alias utiliza como dominio principal.
+ORIGENES_FRONTEND_PRODUCCION = (
+    "https://zonashop.vercel.app",
+    "https://zona-shop-front.vercel.app",
+)
+
+for origen_frontend in ORIGENES_FRONTEND_PRODUCCION:
+    if origen_frontend not in CORS_ALLOWED_ORIGINS:
+        CORS_ALLOWED_ORIGINS.append(origen_frontend)
+    if origen_frontend not in CSRF_TRUSTED_ORIGINS:
+        CSRF_TRUSTED_ORIGINS.append(origen_frontend)
+
 CORS_ALLOW_CREDENTIALS = True
 
 SESSION_COOKIE_HTTPONLY = True
