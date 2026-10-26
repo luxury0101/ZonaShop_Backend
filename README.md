@@ -172,11 +172,60 @@ Las pruebas utilizan SQLite y no modifican la base PostgreSQL de desarrollo.
 | `DJANGO_TRUST_PROXY_SSL` | Confía en el proxy HTTPS de producción. |
 | `DJANGO_COOKIE_SAMESITE` | Política `SameSite` de las cookies. |
 | `DJANGO_EMAIL_BACKEND` | Sistema utilizado para enviar correos. |
+| `EMAIL_HOST`, `EMAIL_PORT` | Servidor y puerto SMTP de producción. |
+| `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD` | Credenciales SMTP. |
+| `EMAIL_USE_TLS`, `DEFAULT_FROM_EMAIL` | Seguridad y remitente de correo. |
+| `BLOB_STORE_ID` | Identificador del almacén Vercel Blob conectado. |
+| `BLOB_READ_WRITE_TOKEN` | Credencial alternativa para Vercel Blob. |
 | `LOGIN_MAX_ATTEMPTS` | Intentos fallidos permitidos. |
 | `LOGIN_ATTEMPT_WINDOW_SECONDS` | Ventana para contabilizar intentos. |
 | `LOGIN_BLOCK_SECONDS` | Duración del bloqueo por fuerza bruta. |
 
 Los valores seguros se activan automáticamente cuando `DJANGO_DEBUG=False`.
+
+## Despliegue en Vercel
+
+Importa este repositorio como un proyecto de Vercel. Django y `manage.py` se
+detectan automáticamente. La versión de Python está fijada en `.python-version`
+y `pyproject.toml` ejecuta las migraciones durante cada despliegue de
+producción. Los previews no migran la base de producción.
+
+Antes de desplegar:
+
+1. Conecta una base PostgreSQL persistente (por ejemplo, Neon) y confirma que
+   Vercel haya creado `DATABASE_URL`.
+2. Crea un almacén **público** de Vercel Blob y conéctalo al proyecto. El SDK
+   utiliza automáticamente `BLOB_STORE_ID` y la credencial OIDC. También admite
+   `BLOB_READ_WRITE_TOKEN` como alternativa.
+3. Define las variables de producción:
+
+```dotenv
+DJANGO_SECRET_KEY=una-clave-larga-y-aleatoria
+DJANGO_DEBUG=False
+DJANGO_ALLOWED_HOSTS=tu-backend.vercel.app
+CORS_ALLOWED_ORIGINS=https://tu-frontend.vercel.app
+CSRF_TRUSTED_ORIGINS=https://tu-frontend.vercel.app
+DJANGO_SECURE_COOKIES=True
+DJANGO_SECURE_SSL_REDIRECT=True
+DJANGO_TRUST_PROXY_SSL=True
+DJANGO_COOKIE_SAMESITE=None
+```
+
+Para una sesión más resistente a bloqueos de cookies de terceros, usa un
+dominio propio con dos subdominios del mismo sitio, por ejemplo
+`www.tudominio.com` y `api.tudominio.com`. En ese caso puedes conservar
+`DJANGO_COOKIE_SAMESITE=Lax`.
+
+Después del primer despliegue, crea el administrador contra la base remota
+desde un entorno seguro que tenga las mismas variables:
+
+```powershell
+vercel env pull .env --environment=production
+python manage.py createsuperuser
+```
+
+No publiques `.env`. El directorio local `media/` tampoco se
+sube: en Vercel las nuevas imágenes se guardan de forma persistente en Blob.
 
 ## Estructura principal
 

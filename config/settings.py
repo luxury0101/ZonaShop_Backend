@@ -78,6 +78,14 @@ ALLOWED_HOSTS = obtener_lista_entorno(
     "localhost,127.0.0.1",
 )
 
+for nombre_variable in (
+    "VERCEL_URL",
+    "VERCEL_PROJECT_PRODUCTION_URL",
+):
+    host_vercel = os.getenv(nombre_variable, "").strip()
+    if host_vercel and host_vercel not in ALLOWED_HOSTS:
+        ALLOWED_HOSTS.append(host_vercel)
+
 
 # Application definition
 
@@ -196,26 +204,67 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.1/howto/static-files/
 
 STATIC_URL = "static/"
+STATIC_ROOT = BASE_DIR / "staticfiles"
 
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
+
+USA_VERCEL_BLOB = any(
+    os.getenv(nombre)
+    for nombre in (
+        "BLOB_STORE_ID",
+        "BLOB_READ_WRITE_TOKEN",
+        "VERCEL_BLOB_READ_WRITE_TOKEN",
+    )
+)
+
+STORAGES = {
+    "default": {
+        "BACKEND": (
+            "catalogo.storage.VercelBlobStorage"
+            if USA_VERCEL_BLOB
+            else "django.core.files.storage.FileSystemStorage"
+        ),
+    },
+    "staticfiles": {
+        "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
+    },
+}
 
 
 # Email
 # https://docs.djangoproject.com/en/6.1/topics/email/#topic-email-configuration
 
-MAILERS = {
-    "default": {
-        "BACKEND": os.getenv(
-            "DJANGO_EMAIL_BACKEND",
-            (
-                "django.core.mail.backends.console.EmailBackend"
-                if DEBUG
-                else "django.core.mail.backends.smtp.EmailBackend"
-            ),
-        ),
-    },
+EMAIL_BACKEND_CONFIGURADO = os.getenv(
+    "DJANGO_EMAIL_BACKEND",
+    (
+        "django.core.mail.backends.console.EmailBackend"
+        if DEBUG
+        else "django.core.mail.backends.smtp.EmailBackend"
+    ),
+)
+
+MAILER_PREDETERMINADO = {
+    "BACKEND": EMAIL_BACKEND_CONFIGURADO,
 }
+
+if EMAIL_BACKEND_CONFIGURADO == "django.core.mail.backends.smtp.EmailBackend":
+    MAILER_PREDETERMINADO["OPTIONS"] = {
+        "host": os.getenv("EMAIL_HOST", ""),
+        "port": int(os.getenv("EMAIL_PORT", "587")),
+        "username": os.getenv("EMAIL_HOST_USER", ""),
+        "password": os.getenv("EMAIL_HOST_PASSWORD", ""),
+        "use_tls": obtener_booleano_entorno("EMAIL_USE_TLS", True),
+    }
+
+MAILERS = {
+    "default": MAILER_PREDETERMINADO,
+}
+
+DEFAULT_FROM_EMAIL = os.getenv(
+    "DEFAULT_FROM_EMAIL",
+    "ZonaShop <no-reply@zonashop.co>",
+)
 
 CORS_ALLOWED_ORIGINS = obtener_lista_entorno(
     "CORS_ALLOWED_ORIGINS",

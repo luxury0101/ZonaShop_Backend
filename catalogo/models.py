@@ -42,6 +42,7 @@ class Producto(models.Model):
 
     imagen = models.ImageField(
         upload_to="productos/",
+        max_length=500,
         blank=True,
         null=True,
     )
