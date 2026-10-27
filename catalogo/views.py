@@ -7,7 +7,7 @@ from rest_framework.parsers import (
 from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
 
-from .models import Categoria, Producto
+from .models import Categoria, Producto, TallaProducto
 from .permissions import EsAdministradorOConsulta
 from .serializers import (
     CategoriaSerializer,
@@ -72,7 +72,7 @@ class ProductoViewSet(ModelViewSet):
     def get_queryset(self):
         queryset = Producto.objects.select_related(
             "categoria"
-        ).all()
+        ).prefetch_related("tallas").all()
 
         categoria_id = self.request.query_params.get(
             "categoria"
@@ -84,6 +84,8 @@ class ProductoViewSet(ModelViewSet):
 
         orden = self.request.query_params.get("orden", "")
 
+        talla = self.request.query_params.get("talla", "").strip().upper()
+
         if categoria_id:
             queryset = queryset.filter(
                 categoria_id=categoria_id
@@ -92,6 +94,12 @@ class ProductoViewSet(ModelViewSet):
         if busqueda:
             queryset = queryset.filter(
                 nombre__icontains=busqueda.strip()
+            )
+
+        if talla in TallaProducto.Talla.values:
+            queryset = queryset.filter(
+                tallas__talla=talla,
+                tallas__stock__gt=0,
             )
 
         ordenamientos = {

@@ -54,13 +54,14 @@ class ItemCarrito(models.Model):
         related_name="items_carrito",
     )
     cantidad = models.PositiveIntegerField(default=1)
+    talla = models.CharField(max_length=2, blank=True, default="")
     actualizado_en = models.DateTimeField(auto_now=True)
 
     class Meta:
         constraints = [
             models.UniqueConstraint(
-                fields=["usuario", "producto"],
-                name="carrito_usuario_producto_unico",
+                fields=["usuario", "producto", "talla"],
+                name="carrito_usuario_producto_talla_unico",
             ),
         ]
         ordering = ["id"]
@@ -121,6 +122,7 @@ class ItemPedido(models.Model):
     nombre_producto = models.CharField(max_length=150)
     precio_unitario = models.DecimalField(max_digits=12, decimal_places=2)
     cantidad = models.PositiveIntegerField()
+    talla = models.CharField(max_length=2, blank=True, default="")
     subtotal = models.DecimalField(max_digits=12, decimal_places=2)
 
     class Meta:

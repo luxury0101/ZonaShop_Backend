@@ -5,7 +5,7 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient, APITestCase
 
-from .models import Categoria, Producto
+from .models import Categoria, Producto, TallaProducto
 from cuentas.models import PerfilUsuario
 
 
@@ -226,3 +226,55 @@ class CatalogoApiTests(APITestCase):
 
         self.assertEqual(respuesta.status_code, status.HTTP_201_CREATED)
         self.assertEqual(respuesta.data["descripcion"], contenido)
+
+    def test_producto_guarda_stock_por_talla_y_filtra_disponibles(self):
+        self.client.force_authenticate(self.administrador)
+        tallas = [
+            {"talla": "XS", "stock": 3},
+            {"talla": "S", "stock": 0},
+            {"talla": "M", "stock": 2},
+            {"talla": "L", "stock": 1},
+            {"talla": "XL", "stock": 0},
+        ]
+        creacion = self.client.post(
+            reverse("producto-list"),
+            {
+                "categoria": self.categoria.id,
+                "nombre": "Camisa con tallas",
+                "precio": "89900.00",
+                "existencias": 0,
+                "tallas": tallas,
+            },
+            format="json",
+        )
+        self.assertEqual(creacion.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(creacion.data["existencias"], 6)
+        self.assertEqual(len(creacion.data["tallas"]), 5)
+        self.assertTrue(creacion.data["tallas"][1]["agotada"])
+
+        disponibles = self.client.get(reverse("producto-list"), {"talla": "M"})
+        agotadas = self.client.get(reverse("producto-list"), {"talla": "XL"})
+        self.assertEqual([item["nombre"] for item in disponibles.data], ["Camisa con tallas"])
+        self.assertEqual(len(agotadas.data), 0)
+
+    def test_producto_rechaza_tallas_repetidas_o_no_permitidas(self):
+        self.client.force_authenticate(self.administrador)
+        for tallas in [
+            [{"talla": "M", "stock": 2}, {"talla": "M", "stock": 1}],
+            [{"talla": "XXL", "stock": 1}],
+            [{"talla": "S", "stock": -1}],
+            [{"talla": "S", "stock": 1.5}],
+        ]:
+            with self.subTest(tallas=tallas):
+                respuesta = self.client.post(
+                    reverse("producto-list"),
+                    {
+                        "categoria": self.categoria.id,
+                        "nombre": "Producto inválido",
+                        "precio": "50000.00",
+                        "existencias": 0,
+                        "tallas": tallas,
+                    },
+                    format="json",
+                )
+                self.assertEqual(respuesta.status_code, status.HTTP_400_BAD_REQUEST)

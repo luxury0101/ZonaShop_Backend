@@ -5,7 +5,7 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient, APITestCase
 
-from catalogo.models import Categoria, Producto
+from catalogo.models import Categoria, Producto, TallaProducto
 
 from .models import ItemCarrito, Pedido, PerfilUsuario
 
@@ -344,3 +344,71 @@ class AutenticacionApiTests(APITestCase):
         self.assertEqual(actualizacion.status_code, status.HTTP_200_OK)
         pedido.refresh_from_db()
         self.assertEqual(pedido.estado, Pedido.Estado.ENVIADO)
+
+    def test_carrito_y_pago_separan_y_validan_stock_por_talla(self):
+        categoria = Categoria.objects.create(nombre="Ropa con tallas")
+        producto = Producto.objects.create(
+            categoria=categoria,
+            nombre="Camisa oversize",
+            precio=Decimal("89900.00"),
+            existencias=8,
+        )
+        TallaProducto.objects.bulk_create([
+            TallaProducto(producto=producto, talla="XS", stock=3),
+            TallaProducto(producto=producto, talla="S", stock=0),
+            TallaProducto(producto=producto, talla="L", stock=5),
+        ])
+        self.client.force_login(self.usuario)
+
+        carrito = self.client.put(
+            reverse("cuentas:carrito"),
+            {
+                "items": [
+                    {"id": producto.id, "cantidad": 2, "talla": "XS"},
+                    {"id": producto.id, "cantidad": 4, "talla": "L"},
+                ],
+                "fusionar": False,
+            },
+            format="json",
+        )
+        self.assertEqual(carrito.status_code, status.HTTP_200_OK)
+        self.assertEqual({item["talla"] for item in carrito.data}, {"XS", "L"})
+
+        compra = self.client.post(
+            reverse("cuentas:pedidos"),
+            {
+                "items": [
+                    {"id": producto.id, "cantidad": 2, "talla": "XS"},
+                    {"id": producto.id, "cantidad": 1, "talla": "L"},
+                ],
+                "envio": self.datos_envio(),
+            },
+            format="json",
+        )
+        self.assertEqual(compra.status_code, status.HTTP_201_CREATED)
+        self.assertEqual({item["talla"] for item in compra.data["items"]}, {"XS", "L"})
+        producto.refresh_from_db()
+        self.assertEqual(producto.existencias, 5)
+        self.assertEqual(producto.tallas.get(talla="XS").stock, 1)
+        self.assertEqual(producto.tallas.get(talla="L").stock, 4)
+
+    def test_pago_exige_talla_para_producto_con_tallas(self):
+        categoria = Categoria.objects.create(nombre="Talla obligatoria")
+        producto = Producto.objects.create(
+            categoria=categoria,
+            nombre="Jean",
+            precio=Decimal("110000.00"),
+            existencias=2,
+        )
+        TallaProducto.objects.create(producto=producto, talla="M", stock=2)
+        self.client.force_login(self.usuario)
+        respuesta = self.client.post(
+            reverse("cuentas:pedidos"),
+            {
+                "items": [{"id": producto.id, "cantidad": 1}],
+                "envio": self.datos_envio(),
+            },
+            format="json",
+        )
+        self.assertEqual(respuesta.status_code, status.HTTP_409_CONFLICT)
+        self.assertIn("Elige una talla", respuesta.data["detail"])

@@ -3,6 +3,7 @@ from django.contrib.auth.password_validation import validate_password
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
+from catalogo.models import TallaProducto
 from .models import ItemCarrito, ItemPedido, Pedido, PerfilUsuario
 
 
@@ -120,6 +121,11 @@ class EstadoSesionSerializer(serializers.Serializer):
 class ItemCarritoEntradaSerializer(serializers.Serializer):
     id = serializers.IntegerField(min_value=1)
     cantidad = serializers.IntegerField(min_value=1)
+    talla = serializers.ChoiceField(
+        choices=TallaProducto.Talla.choices,
+        allow_blank=True,
+        default="",
+    )
 
 
 class FusionCarritoSerializer(serializers.Serializer):
@@ -135,7 +141,7 @@ class ItemCarritoSerializer(serializers.ModelSerializer):
         max_digits=12,
         decimal_places=2,
     )
-    existencias = serializers.IntegerField(source="producto.existencias")
+    existencias = serializers.SerializerMethodField()
     imagen = serializers.ImageField(
         source="producto.imagen",
         read_only=True,
@@ -150,8 +156,12 @@ class ItemCarritoSerializer(serializers.ModelSerializer):
             "precio",
             "existencias",
             "cantidad",
+            "talla",
             "imagen",
         ]
+
+    def get_existencias(self, objeto) -> int:
+        return objeto.producto.stock_para_talla(objeto.talla)
 
 
 class CompraSimuladaSerializer(serializers.Serializer):
@@ -163,8 +173,8 @@ class CompraSimuladaSerializer(serializers.Serializer):
         if not items:
             raise serializers.ValidationError("El carrito está vacío.")
 
-        ids = [item["id"] for item in items]
-        if len(ids) != len(set(ids)):
+        claves = [(item["id"], item.get("talla", "")) for item in items]
+        if len(claves) != len(set(claves)):
             raise serializers.ValidationError(
                 "El carrito contiene productos duplicados."
             )
@@ -289,6 +299,7 @@ class ItemPedidoSerializer(serializers.ModelSerializer):
             "nombre_producto",
             "precio_unitario",
             "cantidad",
+            "talla",
             "subtotal",
         ]
 

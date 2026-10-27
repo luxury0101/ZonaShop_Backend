@@ -20,7 +20,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
-from catalogo.models import Producto
+from catalogo.models import Producto, TallaProducto
 
 from .models import IntentoInicioSesion, ItemCarrito, ItemPedido, Pedido, PerfilUsuario
 from .permissions import EsAdministrador
@@ -230,35 +230,44 @@ def carrito_usuario(request):
         fusionar = serializer.validated_data["fusionar"]
         cantidades = {}
         for item in serializer.validated_data["items"]:
-            cantidades[item["id"]] = cantidades.get(item["id"], 0) + item["cantidad"]
-        productos = Producto.objects.filter(id__in=cantidades).in_bulk()
+            clave = (item["id"], item.get("talla", ""))
+            cantidades[clave] = cantidades.get(clave, 0) + item["cantidad"]
+        ids_productos = {producto_id for producto_id, _ in cantidades}
+        productos = Producto.objects.prefetch_related("tallas").filter(
+            id__in=ids_productos
+        ).in_bulk()
         if not fusionar:
-            ItemCarrito.objects.filter(usuario=request.user).exclude(
-                producto_id__in=productos,
-            ).delete()
-        for producto_id, cantidad in cantidades.items():
+            ItemCarrito.objects.filter(usuario=request.user).delete()
+        for (producto_id, talla), cantidad in cantidades.items():
             producto = productos.get(producto_id)
-            if not producto or producto.existencias < 1:
+            if not producto:
+                continue
+            stock_disponible = producto.stock_para_talla(talla)
+            if stock_disponible < 1:
                 continue
             item, creado = ItemCarrito.objects.select_for_update().get_or_create(
                 usuario=request.user,
                 producto=producto,
+                talla=talla,
                 defaults={"cantidad": 0},
             )
             base = item.cantidad if fusionar and not creado else 0
-            item.cantidad = min(base + cantidad, producto.existencias)
+            item.cantidad = min(base + cantidad, stock_disponible)
             item.save()
 
     items = list(
-        ItemCarrito.objects.filter(usuario=request.user).select_related("producto")
+        ItemCarrito.objects.filter(usuario=request.user)
+        .select_related("producto")
+        .prefetch_related("producto__tallas")
     )
     items_validos = []
     for item in items:
-        if item.producto.existencias < 1:
+        stock_disponible = item.producto.stock_para_talla(item.talla)
+        if stock_disponible < 1:
             item.delete()
             continue
-        if item.cantidad > item.producto.existencias:
-            item.cantidad = item.producto.existencias
+        if item.cantidad > stock_disponible:
+            item.cantidad = stock_disponible
             item.save(update_fields=["cantidad", "actualizado_en"])
         items_validos.append(item)
     return Response(
@@ -289,42 +298,73 @@ def pedidos_usuario(request):
     serializer = CompraSimuladaSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
     cantidades = {
-        item["id"]: item["cantidad"]
+        (item["id"], item.get("talla", "")): item["cantidad"]
         for item in serializer.validated_data["items"]
     }
     envio = serializer.validated_data["envio"]
 
+    ids_productos = {producto_id for producto_id, _ in cantidades}
     productos = {
         producto.id: producto
         for producto in Producto.objects.select_for_update()
-        .filter(id__in=cantidades)
+        .filter(id__in=ids_productos)
         .order_by("id")
     }
-    faltantes = set(cantidades) - set(productos)
+    faltantes = ids_productos - set(productos)
     if faltantes:
         return Response(
             {"detail": "Uno de los productos ya no está disponible."},
             status=status.HTTP_409_CONFLICT,
         )
 
-    for producto_id, cantidad in cantidades.items():
+    tallas_bloqueadas = {
+        (talla.producto_id, talla.talla): talla
+        for talla in TallaProducto.objects.select_for_update()
+        .filter(producto_id__in=ids_productos)
+        .order_by("producto_id", "id")
+    }
+    productos_con_tallas = {
+        producto_id for producto_id, _ in tallas_bloqueadas
+    }
+
+    for (producto_id, talla), cantidad in cantidades.items():
         producto = productos[producto_id]
-        if producto.existencias < cantidad:
+        usa_tallas = producto_id in productos_con_tallas
+        if usa_tallas and not talla:
+            return Response(
+                {"detail": f"Elige una talla para {producto.nombre}."},
+                status=status.HTTP_409_CONFLICT,
+            )
+        if not usa_tallas and talla:
+            return Response(
+                {"detail": f"{producto.nombre} no utiliza tallas."},
+                status=status.HTTP_409_CONFLICT,
+            )
+        registro_talla = tallas_bloqueadas.get((producto_id, talla))
+        if usa_tallas and not registro_talla:
+            return Response(
+                {"detail": f"La talla {talla} no está disponible para {producto.nombre}."},
+                status=status.HTTP_409_CONFLICT,
+            )
+        disponibles = registro_talla.stock if usa_tallas else producto.existencias
+        if disponibles < cantidad:
             return Response(
                 {
                     "detail": (
                         f"No hay stock suficiente de {producto.nombre}. "
-                        f"Solo quedan {producto.existencias} unidades disponibles."
+                        f"Solo quedan {disponibles} unidades disponibles"
+                        f"{f' en talla {talla}' if talla else ''}."
                     ),
                     "producto": producto.nombre,
-                    "disponibles": producto.existencias,
+                    "talla": talla,
+                    "disponibles": disponibles,
                 },
                 status=status.HTTP_409_CONFLICT,
             )
 
     total = sum(
         productos[producto_id].precio * cantidad
-        for producto_id, cantidad in cantidades.items()
+        for (producto_id, _), cantidad in cantidades.items()
     )
     pedido = Pedido.objects.create(
         usuario=request.user,
@@ -351,7 +391,7 @@ def pedidos_usuario(request):
         perfil.save()
 
     items_pedido = []
-    for producto_id, cantidad in cantidades.items():
+    for (producto_id, talla), cantidad in cantidades.items():
         producto = productos[producto_id]
         subtotal = producto.precio * cantidad
         items_pedido.append(
@@ -361,9 +401,14 @@ def pedidos_usuario(request):
                 nombre_producto=producto.nombre,
                 precio_unitario=producto.precio,
                 cantidad=cantidad,
+                talla=talla,
                 subtotal=subtotal,
             )
         )
+        registro_talla = tallas_bloqueadas.get((producto_id, talla))
+        if registro_talla:
+            registro_talla.stock -= cantidad
+            registro_talla.save(update_fields=["stock"])
         producto.existencias -= cantidad
         producto.save(update_fields=["existencias"])
 

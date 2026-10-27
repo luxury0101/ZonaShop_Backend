@@ -79,3 +79,43 @@ class Producto(models.Model):
     @property
     def agotado(self):
         return self.existencias == 0
+
+    def stock_para_talla(self, talla=""):
+        tallas = list(self.tallas.all())
+        if not tallas:
+            return self.existencias if not talla else 0
+        if not talla:
+            return 0
+        return next(
+            (item.stock for item in tallas if item.talla == talla),
+            0,
+        )
+
+
+class TallaProducto(models.Model):
+    class Talla(models.TextChoices):
+        XS = "XS", "XS"
+        S = "S", "S"
+        M = "M", "M"
+        L = "L", "L"
+        XL = "XL", "XL"
+
+    producto = models.ForeignKey(
+        Producto,
+        on_delete=models.CASCADE,
+        related_name="tallas",
+    )
+    talla = models.CharField(max_length=2, choices=Talla.choices)
+    stock = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ["id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["producto", "talla"],
+                name="producto_talla_unica",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.producto} · {self.talla}: {self.stock}"
