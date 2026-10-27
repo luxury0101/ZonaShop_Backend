@@ -1,12 +1,38 @@
 from decimal import Decimal
+from io import StringIO
 
 from django.contrib.auth import get_user_model
+from django.core.management import call_command
+from django.test import TestCase
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient, APITestCase
 
 from .models import Categoria, Producto, TallaProducto
 from cuentas.models import PerfilUsuario
+
+
+class CatalogoDemoCommandTests(TestCase):
+    def test_crea_catalogo_variado_y_es_idempotente(self):
+        salida = StringIO()
+        call_command("cargar_catalogo_demo", sin_imagenes=True, stdout=salida)
+        call_command("cargar_catalogo_demo", sin_imagenes=True, stdout=salida)
+
+        self.assertEqual(Producto.objects.count(), 20)
+        self.assertEqual(Categoria.objects.count(), 6)
+        self.assertEqual(Producto.objects.filter(existencias=0).count(), 1)
+        self.assertEqual(
+            Producto.objects.filter(existencias__gte=1, existencias__lte=3).count(),
+            3,
+        )
+        self.assertEqual(
+            Producto.objects.filter(tallas__isnull=False).distinct().count(),
+            13,
+        )
+        self.assertFalse(
+            TallaProducto.objects.exclude(talla__in=["S", "M", "L", "XL"])
+            .exists()
+        )
 
 
 class CatalogoApiTests(APITestCase):
