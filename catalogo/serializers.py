@@ -88,6 +88,17 @@ class ProductoSerializer(serializers.ModelSerializer):
         allow_null=True,
     )
 
+    imagen_secundaria = serializers.ImageField(
+        required=False,
+        allow_null=True,
+    )
+
+    existencias = serializers.IntegerField(
+        required=False,
+        min_value=0,
+        max_value=2147483647,
+    )
+
     categoria_nombre = serializers.CharField(
         source="categoria.nombre",
         read_only=True,
@@ -109,6 +120,7 @@ class ProductoSerializer(serializers.ModelSerializer):
             "nombre",
             "descripcion",
             "imagen",
+            "imagen_secundaria",
             "precio",
             "existencias",
             "creado_en",
@@ -125,6 +137,20 @@ class ProductoSerializer(serializers.ModelSerializer):
             ])
             producto.existencias = sum(item["stock"] for item in tallas)
             producto.save(update_fields=["existencias"])
+
+    def validate(self, attrs):
+        tallas = attrs.get("tallas")
+        if self.instance is None and tallas is None and "existencias" not in attrs:
+            raise serializers.ValidationError({
+                "existencias": "Indica las existencias o el stock por talla.",
+            })
+        if tallas is not None:
+            total = sum(item["stock"] for item in tallas)
+            if total > 2147483647:
+                raise serializers.ValidationError({
+                    "tallas": "El stock total supera el máximo permitido.",
+                })
+        return attrs
 
     @transaction.atomic
     def create(self, validated_data):
@@ -144,7 +170,7 @@ class ProductoSerializer(serializers.ModelSerializer):
             self._guardar_tallas(producto, tallas)
         return producto
 
-    def validate_imagen(self, imagen):
+    def _validar_imagen(self, imagen):
         if imagen is None:
             return imagen
 
@@ -176,3 +202,9 @@ class ProductoSerializer(serializers.ModelSerializer):
             )
 
         return imagen
+
+    def validate_imagen(self, imagen):
+        return self._validar_imagen(imagen)
+
+    def validate_imagen_secundaria(self, imagen):
+        return self._validar_imagen(imagen)

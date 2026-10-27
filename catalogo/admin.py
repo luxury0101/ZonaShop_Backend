@@ -39,6 +39,16 @@ class ProductoAdmin(admin.ModelAdmin):
         "esta_agotado",
     )
 
+    fields = (
+        "categoria",
+        "nombre",
+        "descripcion",
+        "imagen",
+        "imagen_secundaria",
+        "precio",
+        "existencias",
+    )
+
     list_filter = (
         "categoria",
     )

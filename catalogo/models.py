@@ -11,6 +11,7 @@ class Categoria(models.Model):
     )
 
     descripcion = models.TextField(
+        max_length=2000,
         blank=True,
         default="",
     )
@@ -36,11 +37,19 @@ class Producto(models.Model):
     )
 
     descripcion = models.TextField(
+        max_length=4000,
         blank=True,
         default="",
     )
 
     imagen = models.ImageField(
+        upload_to="productos/",
+        max_length=500,
+        blank=True,
+        null=True,
+    )
+
+    imagen_secundaria = models.ImageField(
         upload_to="productos/",
         max_length=500,
         blank=True,

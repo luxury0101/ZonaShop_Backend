@@ -257,6 +257,42 @@ class CatalogoApiTests(APITestCase):
         self.assertEqual([item["nombre"] for item in disponibles.data], ["Camisa con tallas"])
         self.assertEqual(len(agotadas.data), 0)
 
+    def test_producto_con_tallas_deriva_existencias_sin_campo_redundante(self):
+        self.client.force_authenticate(self.administrador)
+        respuesta = self.client.post(
+            reverse("producto-list"),
+            {
+                "categoria": self.categoria.id,
+                "nombre": "Pantalón por tallas",
+                "precio": "129900.00",
+                "tallas": [
+                    {"talla": "S", "stock": 2},
+                    {"talla": "M", "stock": 3},
+                ],
+            },
+            format="json",
+        )
+        self.assertEqual(respuesta.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(respuesta.data["existencias"], 5)
+
+    def test_producto_rechaza_total_de_tallas_fuera_de_rango(self):
+        self.client.force_authenticate(self.administrador)
+        respuesta = self.client.post(
+            reverse("producto-list"),
+            {
+                "categoria": self.categoria.id,
+                "nombre": "Stock fuera de rango",
+                "precio": "50000.00",
+                "tallas": [
+                    {"talla": "S", "stock": 2147483647},
+                    {"talla": "M", "stock": 1},
+                ],
+            },
+            format="json",
+        )
+        self.assertEqual(respuesta.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(Producto.objects.filter(nombre="Stock fuera de rango").exists())
+
     def test_producto_rechaza_tallas_repetidas_o_no_permitidas(self):
         self.client.force_authenticate(self.administrador)
         for tallas in [
