@@ -38,6 +38,14 @@ class ListaTallasField(serializers.ListField):
     child = serializers.DictField()
 
     def to_internal_value(self, data):
+        # MultiPartParser entrega un único valor de FormData como una lista
+        # de una cadena. Normalizamos ese caso antes de validar cada talla.
+        if (
+            isinstance(data, list)
+            and len(data) == 1
+            and isinstance(data[0], str)
+        ):
+            data = data[0]
         if isinstance(data, str):
             try:
                 data = json.loads(data)

@@ -278,3 +278,26 @@ class CatalogoApiTests(APITestCase):
                     format="json",
                 )
                 self.assertEqual(respuesta.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_producto_acepta_tallas_desde_formulario_multipart(self):
+        self.client.force_authenticate(self.administrador)
+        respuesta = self.client.post(
+            reverse("producto-list"),
+            {
+                "categoria": self.categoria.id,
+                "nombre": "Producto desde panel",
+                "precio": "70000.00",
+                "existencias": "0",
+                "tallas": (
+                    '[{"talla":"XS","stock":2},'
+                    '{"talla":"S","stock":1},'
+                    '{"talla":"M","stock":0},'
+                    '{"talla":"L","stock":3},'
+                    '{"talla":"XL","stock":0}]'
+                ),
+            },
+            format="multipart",
+        )
+        self.assertEqual(respuesta.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(respuesta.data["existencias"], 6)
+        self.assertEqual(len(respuesta.data["tallas"]), 5)
